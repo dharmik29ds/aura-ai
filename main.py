@@ -130,7 +130,7 @@ _failed: dict[str, list[float]] = {}
 
 
 async def require_passcode(request: Request):
-return
+    return
 
 
 class ChatIn(BaseModel):
