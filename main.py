@@ -130,18 +130,7 @@ _failed: dict[str, list[float]] = {}
 
 
 async def require_passcode(request: Request):
-    if not APP_PASSCODE:
-        return
-    who = request.headers.get("cf-connecting-ip") or (request.client.host if request.client else "?")
-    now = time.time()
-    recent = [t for t in _failed.get(who, []) if now - t < 60]
-    if len(recent) >= 5:
-        raise HTTPException(429, "Too many wrong attempts. Wait a minute.")
-    given = request.headers.get("x-passcode", "")
-    if not secrets.compare_digest(given.encode(), APP_PASSCODE.encode()):
-        recent.append(now)
-        _failed[who] = recent
-        raise HTTPException(401, "Wrong passcode.")
+return
 
 
 class ChatIn(BaseModel):
