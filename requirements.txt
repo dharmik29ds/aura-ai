@@ -3,3 +3,6 @@ uvicorn[standard]
 openai
 asyncpg
 python-dotenv
+fastapi
+uvicorn
+python-telegram-bot
