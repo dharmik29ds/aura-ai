@@ -14,7 +14,6 @@ import json
 import os
 import secrets
 import time
-import urllib.parse
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
@@ -23,7 +22,6 @@ from zoneinfo import ZoneInfo
 import asyncpg
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse
-from fastapi.staticfiles import StaticFiles
 from openai import AsyncOpenAI          # Groq is OpenAI-compatible
 from pydantic import BaseModel
 
@@ -75,9 +73,12 @@ async def lifespan(app: FastAPI):
     await pool.close()
 
 
+
+
 async def reminder_loop():
     """Runs forever in the background: every TELEGRAM_POLL_SECONDS, sends
-    any reminder whose time has arrived, then marks it sent."""
+    any reminder whose time has arrived, then marks it sent (or reschedules
+    recurring ones would need extra logic -- kept simple here for now)."""
     while True:
         try:
             due = await pool.fetch(
@@ -99,35 +100,9 @@ async def reminder_loop():
         except Exception as e:
             print(f"[reminder_loop error] {e!r}")
         await asyncio.sleep(TELEGRAM_POLL_SECONDS)
-async def build_system_prompt(user_id: str) -> tuple[str, bool]:
-    prof = await pool.fetchrow("select * from profiles where id = $1", user_id)
-    mems = await pool.fetch(
-        "select kind, content from memories where user_id = $1 and deleted_at is null "
-        "order by created_at desc limit 10", user_id)
-    memories = "\n".join(f"- ({m['kind']}) {m['content']}" for m in mems) or "None yet."
-    now_local = datetime.now(ZoneInfo(prof["timezone"])).strftime("%A, %d %B %Y, %I:%M %p")
-    prompt = (PROMPT_TEMPLATE
-              .replace("{{display_name}}", prof["display_name"] or "the user")
-              .replace("{{language_pref}}", prof["language_pref"])
-              .replace("{{tone_pref}}", prof["tone_pref"])
-              .replace("{{timezone}}", prof["timezone"])
-              .replace("{{now_local}}", now_local)
-              .replace("{{retrieved_memories}}", memories))
 
-    # 🌟 આ નવી ઈન્સ્ટ્રક્શન્સ ઉમેરી છે
-    prompt += """
-
-RESPONSE INSTRUCTIONS:
-1. Answer general knowledge questions (like phone specs, general facts, coding) DIRECTLY using your built-in knowledge. Do NOT use web search tools unless live/real-time information is explicitly required.
-2. NEVER use Markdown tables (do NOT use '|' or '---|---' syntax).
-3. NEVER output raw HTML tags like <br>.
-4. Always structure details using clean bullet points (•) and bold titles for maximum readability.
-"""
-
-    return prompt, prof["memory_enabled"]
 
 app = FastAPI(lifespan=lifespan)
-app.mount("/static", StaticFiles(directory=BASE / "static"), name="static")
 
 
 async def build_system_prompt(user_id: str) -> tuple[str, bool]:
@@ -144,17 +119,9 @@ async def build_system_prompt(user_id: str) -> tuple[str, bool]:
               .replace("{{timezone}}", prof["timezone"])
               .replace("{{now_local}}", now_local)
               .replace("{{retrieved_memories}}", memories))
-
-    # 🌟 આ લાઈનો ઉમેરો (જેથી AI Table કે <br> વગર ક્લીન bullet points આપશે)
-    prompt += """
-
-FORMATTING RULES:
-1. NEVER use Markdown tables (do NOT use '|' or '---|---' syntax).
-2. NEVER output raw HTML tags like <br>.
-3. Always structure details using clean bullet points (•) and bold titles for maximum readability.
-"""
-
     return prompt, prof["memory_enabled"]
+
+
 
 # ---------------------------------------------------------------
 # Simple passcode gate (stop-gap until real user login is added)
@@ -199,60 +166,6 @@ async def login():
 
 @app.post("/chat", dependencies=[Depends(require_passcode)])
 async def chat(body: ChatIn):
-    user_text = body.message.strip()
-# ✅ નવો અને પાવરફુલ ઈમેજ ટ્રીગર અને પ્રોમ્પટ ક્લિનિંગ કોડ (Line 170 થી શરૂ)
-    
-    # મુખ્ય ટ્રીગર શબ્દો (Image types, actions, and formats included)
-    image_trigger_words = [
-        "photo", "image", "picture", "draw", "generate", "create", 
-        "wallpaper", "art", "painting", "sketch", "make", "pic",
-        ".jpg", ".png", ".webp", ".jpeg", "jpg", "png", "jpeg" # common formats
-    ]
-
-    # પ્રોમ્પટમાંથી હટાવવાના વધારાના શબ્દો (ફાઈલ ફોર્મેટ અને "file")
-    # જેથી "draw a tiger .jpg file" લખો તો પણ એ "tiger" પરથી જ ફોટો બનાવે
-    words_to_strip = [
-        ".jpg", ".png", ".webp", ".jpeg", 
-        "jpg", "png", "jpeg", "file", 
-        "file ma", "file na", "format ma", "format na"
-    ]
-
-    # પ્રોમ્પટને ક્લીન કરવાનો અને આઈડેન્ટીફાઈ કરવાનો લોજિક
-    is_image_request = any(word in user_text.lower() for word in image_trigger_words)
-    cleaned_user_text = user_text
-    
-    if is_image_request:
-        # જો ઈમેજ માંગ્યો હોય, તો વધારાના ફોર્મેટ શબ્દો હટાવીને પ્રોમ્પટ સાફ કરો
-        for word in words_to_strip:
-            cleaned_user_text = cleaned_user_text.replace(word, ' ').replace(word.upper(), ' ')
-        
-        # URL encode clean prompt (clean = focusing only on content)
-        encoded_prompt = urllib.parse.quote(cleaned_user_text.strip())
-        
-        # model=flux for highest quality HD image
-        img_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1024&height=1024&model=flux&nologo=true"
-        
-        reply_msg = f"Here is your generated image:\n\n![Generated Image]({img_url})"
-        
-        return {
-            "response": reply_msg,
-            "reply": reply_msg,
-            "images": [img_url],
-            "pending": [],
-            "pending_actions": []
-        }
-    # 👇 અહીં સુધી મૂકો (Lines replace કર્યા પછી નીચેથી "user_id = DEV_USER_ID" ચાલુ થવું જોઈએ)
-
-    # ૨. સામાન્ય ચેટ અને AI ટૂલ્સ
-        return {
-            "response": reply_msg,
-            "reply": reply_msg,
-            "images": [img_url],
-            "pending": [],
-            "pending_actions": []
-        }
-
-    # ૨. સામાન્ય ચેટ અને AI ટૂલ્સ
     user_id = DEV_USER_ID
     system, memory_enabled = await build_system_prompt(user_id)
     tools = [t for t in GROQ_TOOLS if memory_enabled or t["function"]["name"] != "save_memory"]
@@ -271,6 +184,10 @@ async def chat(body: ChatIn):
                 resp = await client.chat.completions.create(
                     model=MODEL, messages=messages, tools=tools, max_tokens=1024)
             except Exception as e:
+                # Some models occasionally hallucinate a tool name that
+                # wasn't offered (e.g. calling "search" when only
+                # "web_search"/"image_search" exist). Retry once without
+                # tools rather than failing the whole request.
                 if "tool call validation failed" in str(e).lower() and tools:
                     print(f"[groq tool-name error, retrying without tools] {e!r}")
                     resp = await client.chat.completions.create(
@@ -305,29 +222,22 @@ async def chat(body: ChatIn):
                 messages.append({"role": "tool", "tool_call_id": tc.id, "content": json.dumps(out)})
     except Exception as e:
         print(f"[groq error] {e!r}")
-        err_msg = "Sorry, I couldn't reach the AI service. Check your GROQ_API_KEY and terminal logs."
-        return {
-            "response": err_msg,
-            "reply": err_msg,
-            "pending_actions": [],
-            "pending": [],
-            "images": []
-        }
+        return {"reply": "Sorry, I couldn't reach the AI service. Check your GROQ_API_KEY and "
+                         "the terminal for details, then try again.", "pending_actions": []}
 
-    return {
-        "response": reply_text or "Done.",
-        "reply": reply_text or "Done.",
-        "pending_actions": pending,
-        "pending": pending,
-        "images": images
-    }
+    return {"reply": reply_text or "Done.", "pending_actions": pending, "images": images}
+
+
 
 
 @app.api_route("/telegram/link", methods=["GET", "POST"], dependencies=[Depends(require_passcode)])
 async def telegram_link():
+    """Call this once, right after you have messaged your bot on Telegram,
+    to save your chat_id against the dev user's profile."""
     chat_id = await telegram.get_latest_chat_id()
     if not chat_id:
-        raise HTTPException(400, "No recent message found. Send your bot any message on Telegram first, then try this again.")
+        raise HTTPException(400, "No recent message found. Send your bot any message on "
+                                 "Telegram first, then try this again.")
     await pool.execute(
         "update profiles set telegram_chat_id = $1, updated_at = now() where id = $2",
         chat_id, DEV_USER_ID)
