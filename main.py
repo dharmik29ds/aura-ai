@@ -6,7 +6,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from groq import AsyncGroq
-from tools import GROQ_TOOLS, run_tool
+from tools import TOOLS, run_tool
 
 BASE = Path(__file__).resolve().parent
 
@@ -59,7 +59,6 @@ async def chat(body: ChatIn):
 
     # ૨. સામાન્ય ચેટ (LLM response)
     user_id = DEV_USER_ID
-    tools = GROQ_TOOLS
 
     messages = [{"role": "system", "content": "You are Aura, a helpful AI assistant."}]
     messages += [m for m in body.history if m.get("role") in ("user", "assistant")]
@@ -69,7 +68,7 @@ async def chat(body: ChatIn):
     try:
         for _ in range(6):
             resp = await client.chat.completions.create(
-                model=MODEL, messages=messages, tools=tools, max_tokens=1024
+                model=MODEL, messages=messages, tools=TOOLS, max_tokens=1024
             )
             msg = resp.choices[0].message
 
