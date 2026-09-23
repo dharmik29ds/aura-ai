@@ -130,7 +130,18 @@ _failed: dict[str, list[float]] = {}
 
 
 async def require_passcode(request: Request):
-    return
+    if not APP_PASSCODE:
+        return
+    who = request.headers.get("cf-connecting-ip") or (request.client.host if request.client else "?")
+    now = time.time()
+    recent = [t for t in _failed.get(who, []) if now - t < 60]
+    if len(recent) >= 5:
+        raise HTTPException(429, "Too many wrong attempts. Wait a minute.")
+    given = request.headers.get("x-passcode", "")
+    if not secrets.compare_digest(given.encode(), APP_PASSCODE.encode()):
+        recent.append(now)
+        _failed[who] = recent
+        raise HTTPException(401, "Wrong passcode.")
 
 
 class ChatIn(BaseModel):
@@ -164,6 +175,7 @@ async def chat(body: ChatIn):
     messages.append({"role": "user", "content": body.message})
 
     pending = []
+    images = []
     reply_text = ""
 
     try:
@@ -193,13 +205,15 @@ async def chat(body: ChatIn):
                     out = await run_tool(pool, user_id, tc.function.name, args)
                 if out.get("pending_action_id"):
                     pending.append({"id": out["pending_action_id"], "summary": out["summary"]})
+                if tc.function.name == "image_search" and out.get("ok"):
+                    images.extend(out.get("images", []))
                 messages.append({"role": "tool", "tool_call_id": tc.id, "content": json.dumps(out)})
     except Exception as e:
         print(f"[groq error] {e!r}")
         return {"reply": "Sorry, I couldn't reach the AI service. Check your GROQ_API_KEY and "
                          "the terminal for details, then try again.", "pending_actions": []}
 
-    return {"reply": reply_text or "Done.", "pending_actions": pending}
+    return {"reply": reply_text or "Done.", "pending_actions": pending, "images": images}
 
 
 
