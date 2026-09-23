@@ -237,7 +237,28 @@ async def telegram_status():
     prof = await pool.fetchrow("select telegram_chat_id from profiles where id = $1", DEV_USER_ID)
     return {"linked": bool(prof["telegram_chat_id"])}
 
+@app.post("/chat", dependencies=[Depends(require_passcode)])
+async def chat_endpoint(payload: ChatIn):
+    user_text = payload.message
 
+    # ૧. ઈમેજ જનરેટ કરવાનો લોજિક
+    image_keywords = ["create a photo", "generate image", "draw", "make a photo", "photo of", "image of", "create photo"]
+    if any(keyword in user_text.lower() for keyword in image_keywords):
+        img_url = generate_image_url(user_text)
+        return {"response": f"Here is your generated image:\n\n![Generated Image]({img_url})"}
+
+    # ૨. Groq/LLM ટેક્સ્ટ રિસ્પોન્સ
+    sys_prompt, _ = await build_system_prompt(DEV_USER_ID)
+    completion = await client.chat.completions.create(
+        model=MODEL,
+        messages=[
+            {"role": "system", "content": sys_prompt},
+            *payload.history,
+            {"role": "user", "content": user_text}
+        ]
+    )
+    reply = completion.choices[0].message.content
+    return {"response": reply}
 @app.post("/confirm/{action_id}", dependencies=[Depends(require_passcode)])
 async def confirm(action_id: str):
     result = await execute_confirmed(pool, DEV_USER_ID, action_id)
@@ -252,3 +273,8 @@ async def reject(action_id: str):
         "update pending_actions set status = 'rejected' "
         "where id = $1 and user_id = $2 and status = 'pending'", action_id, DEV_USER_ID)
     return {"ok": True}
+import urllib.parse
+
+def generate_image_url(prompt: str) -> str:
+    encoded_prompt = urllib.parse.quote(prompt)
+    return f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1024&height=1024&nologo=true"
