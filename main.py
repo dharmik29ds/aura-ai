@@ -172,7 +172,10 @@ async def chat(body: ChatIn):
     if any(keyword in user_text.lower() for keyword in image_keywords):
         encoded_prompt = urllib.parse.quote(user_text)
         img_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1024&height=1024&nologo=true"
-        return {"response": f"Here is your generated image:\n\n![Generated Image]({img_url})"}
+        return {
+            "response": f"Here is your generated image:\n\n![Generated Image]({img_url})",
+            "reply": f"Here is your generated image:\n\n![Generated Image]({img_url})"
+        }
     user_id = DEV_USER_ID
     system, memory_enabled = await build_system_prompt(user_id)
     tools = [t for t in GROQ_TOOLS if memory_enabled or t["function"]["name"] != "save_memory"]
