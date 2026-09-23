@@ -19,7 +19,7 @@ import json
 from datetime import datetime
 from typing import Any
 
-import search as search_module
+# import search as search_module
 
 # ---------------------------------------------------------------
 # Tool definitions (Anthropic Messages API format)
