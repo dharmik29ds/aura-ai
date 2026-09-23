@@ -179,9 +179,21 @@ async def chat(body: ChatIn):
     reply_text = ""
 
     try:
-        for _ in range(6):  # tool-use loop, capped
-            resp = await client.chat.completions.create(
-                model=MODEL, messages=messages, tools=tools, max_tokens=1024)
+        for i in range(6):  # tool-use loop, capped
+            try:
+                resp = await client.chat.completions.create(
+                    model=MODEL, messages=messages, tools=tools, max_tokens=1024)
+            except Exception as e:
+                # Some models occasionally hallucinate a tool name that
+                # wasn't offered (e.g. calling "search" when only
+                # "web_search"/"image_search" exist). Retry once without
+                # tools rather than failing the whole request.
+                if "tool call validation failed" in str(e).lower() and tools:
+                    print(f"[groq tool-name error, retrying without tools] {e!r}")
+                    resp = await client.chat.completions.create(
+                        model=MODEL, messages=messages, tools=None, max_tokens=1024)
+                else:
+                    raise
             msg = resp.choices[0].message
 
             if not msg.tool_calls:
