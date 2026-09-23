@@ -8,7 +8,7 @@ DEV MODE: no login screen yet. The app acts as the single user whose UUID is
 in DEV_USER_ID (.env). Before real users, add auth (e.g. Supabase Auth) and
 take user_id from the verified token instead.
 """
-import urllib.parse
+
 import asyncio
 import json
 import os
@@ -163,66 +163,9 @@ async def config():
 async def login():
     return {"ok": True}
 
+
 @app.post("/chat", dependencies=[Depends(require_passcode)])
 async def chat(body: ChatIn):
-    user_text = body.message.strip()
-
-    # Image keywords check
-    image_keywords = ["photo", "image", "draw", "picture", "create photo", "generate image", "make photo"]
-    if any(keyword in user_text.lower() for keyword in image_keywords):
-        encoded_prompt = urllib.parse.quote(user_text)
-        img_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1024&height=1024&nologo=true"
-        
-        # Frontend ના બધો જ ડેટા સ્ટ્રક્ચર (images array સાથે) રિટર્ન કરો
-        return {
-            "response": f"Here is your generated image:\n\n![Generated Image]({img_url})",
-            "reply": f"Here is your generated image:\n\n![Generated Image]({img_url})",
-            "images": [img_url],
-            "pending": []
-        }
-
-    user_id = DEV_USER_ID
-    system, memory_enabled = await build_system_prompt(user_id)
-    tools = [t for t in GROQ_TOOLS if memory_enabled or t["function"]["name"] != "save_memory"]
-
-    messages = [{"role": "system", "content": system}]
-    messages += [m for m in body.history if m.get("role") in ("user", "assistant")]
-    messages.append({"role": "user", "content": body.message})
-
-    reply_text = ""
-    try:
-        for _ in range(6):
-            resp = await client.chat.completions.create(
-                model=MODEL, messages=messages, tools=tools, max_tokens=1024
-            )
-            msg = resp.choices[0].message
-
-            if not msg.tool_calls:
-                reply_text = msg.content or ""
-                break
-
-            messages.append(msg)
-            for tool_call in msg.tool_calls:
-                tool_result = await run_tool(tool_call, user_id)
-                messages.append({
-                    "role": "tool",
-                    "tool_call_id": tool_call.id,
-                    "content": str(tool_result)
-                })
-
-        return {
-            "response": reply_text,
-            "reply": reply_text,
-            "images": [],
-            "pending": []
-        }
-    except Exception as e:
-        return {
-            "response": f"Error: {str(e)}",
-            "reply": f"Error: {str(e)}",
-            "images": [],
-            "pending": []
-        }
     user_id = DEV_USER_ID
     system, memory_enabled = await build_system_prompt(user_id)
     tools = [t for t in GROQ_TOOLS if memory_enabled or t["function"]["name"] != "save_memory"]
