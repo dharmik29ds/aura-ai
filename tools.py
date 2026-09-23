@@ -19,6 +19,8 @@ import json
 from datetime import datetime
 from typing import Any
 
+import search as search_module
+
 # ---------------------------------------------------------------
 # Tool definitions (Anthropic Messages API format)
 # ---------------------------------------------------------------
@@ -112,6 +114,43 @@ TOOLS = [
                 "status": {"type": "string", "enum": ["pending", "done", "cancelled"]},
             },
             "required": ["reminder_id"],
+        },
+    },
+    {
+        "name": "web_search",
+        "description": (
+            "Search the live web for current information -- prices, comparisons, "
+            "news, specs, 'which X is best', or anything you would not reliably know. "
+            "Returns titles, links, and short snippets. Summarize the results in your "
+            "own words; do not invent facts not found here."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string"},
+            },
+            "required": ["query"],
+        },
+    },
+    {
+        "name": "image_search",
+        "description": (
+            "MANDATORY whenever the user asks to see, show, or share a photo/picture/"
+            "image of anything (a product, phone, place, person, animal, object -- "
+            "e.g. 'iPhone 15 photo', 'show me a cat', 'phone ki photo batao'). "
+            "You must call this tool to get REAL images -- you have no other way to "
+            "get an image, and you must NEVER invent, guess, or type out a URL "
+            "yourself (fake links like example.com/image.jpg are a serious error). "
+            "The images this tool finds are shown to the user automatically below "
+            "your reply, so your text reply should just say something like 'here you "
+            "go' -- do not paste any URL or markdown image syntax in your text."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "What to search for, e.g. 'iPhone 15'"},
+            },
+            "required": ["query"],
         },
     },
     {
@@ -239,11 +278,21 @@ async def delete_record(db, user_id, table, record_id, reason_summary, **_):
             "pending_action_id": str(row["id"]), "summary": reason_summary}
 
 
+
+async def web_search(db, user_id, query, **_):
+    return await search_module.web_search(query)
+
+
+async def image_search(db, user_id, query, **_):
+    return await search_module.image_search(query)
+
+
 HANDLERS = {
     "save_memory": save_memory, "search_memory": search_memory,
     "create_note": create_note, "list_notes": list_notes,
     "create_reminder": create_reminder, "list_reminders": list_reminders,
     "update_reminder": update_reminder, "delete_record": delete_record,
+    "web_search": web_search, "image_search": image_search,
 }
 
 
