@@ -99,7 +99,32 @@ async def reminder_loop():
         except Exception as e:
             print(f"[reminder_loop error] {e!r}")
         await asyncio.sleep(TELEGRAM_POLL_SECONDS)
+async def build_system_prompt(user_id: str) -> tuple[str, bool]:
+    prof = await pool.fetchrow("select * from profiles where id = $1", user_id)
+    mems = await pool.fetch(
+        "select kind, content from memories where user_id = $1 and deleted_at is null "
+        "order by created_at desc limit 10", user_id)
+    memories = "\n".join(f"- ({m['kind']}) {m['content']}" for m in mems) or "None yet."
+    now_local = datetime.now(ZoneInfo(prof["timezone"])).strftime("%A, %d %B %Y, %I:%M %p")
+    prompt = (PROMPT_TEMPLATE
+              .replace("{{display_name}}", prof["display_name"] or "the user")
+              .replace("{{language_pref}}", prof["language_pref"])
+              .replace("{{tone_pref}}", prof["tone_pref"])
+              .replace("{{timezone}}", prof["timezone"])
+              .replace("{{now_local}}", now_local)
+              .replace("{{retrieved_memories}}", memories))
 
+    # 🌟 આ નવી ઈન્સ્ટ્રક્શન્સ ઉમેરી છે
+    prompt += """
+
+RESPONSE INSTRUCTIONS:
+1. Answer general knowledge questions (like phone specs, general facts, coding) DIRECTLY using your built-in knowledge. Do NOT use web search tools unless live/real-time information is explicitly required.
+2. NEVER use Markdown tables (do NOT use '|' or '---|---' syntax).
+3. NEVER output raw HTML tags like <br>.
+4. Always structure details using clean bullet points (•) and bold titles for maximum readability.
+"""
+
+    return prompt, prof["memory_enabled"]
 
 app = FastAPI(lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=BASE / "static"), name="static")
