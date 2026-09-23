@@ -242,7 +242,7 @@ async def chat_endpoint(payload: ChatIn):
     user_text = payload.message
 
     # ૧. ઈમેજ જનરેટ કરવાનો લોજિક
-    image_keywords = ["create a photo", "generate image", "draw", "make a photo", "photo of", "image of", "create photo"]
+   image_keywords = ["create a photo", "generate image", "draw", "make a photo", "photo of", "image of", "create photo", "photo", "image", "picture"]
     if any(keyword in user_text.lower() for keyword in image_keywords):
         img_url = generate_image_url(user_text)
         return {"response": f"Here is your generated image:\n\n![Generated Image]({img_url})"}
