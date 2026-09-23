@@ -291,63 +291,17 @@ def generate_image_url(prompt: str) -> str:
     encoded_prompt = urllib.parse.quote(prompt)
     return f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1024&height=1024&nologo=true"
 
-@app.post("/chat")
-async def chat_endpoint(payload: ChatIn):
-    user_text = payload.message
+@app.post("/chat", dependencies=[Depends(require_passcode)])
+async def chat(body: ChatIn):
+    user_text = body.message
 
-    # ૧. ઈમેજ જનરેટ લોજિક
+    # Image generation logic (૪ સ્પેસ ઇન્ડેન્ટેશન સાથે)
     image_keywords = ["create a photo", "generate image", "draw", "make a photo", "photo of", "image of", "create photo", "photo", "image", "picture"]
     if any(keyword in user_text.lower() for keyword in image_keywords):
-        img_url = generate_image_url(user_text)
+        encoded_prompt = urllib.parse.quote(user_text)
+        img_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1024&height=1024&nologo=true"
         return {"response": f"Here is your generated image:\n\n![Generated Image]({img_url})"}
 
-    # ૨. Groq/LLM ટેક્સ્ટ રિસ્પોન્સ
-    sys_prompt, _ = await build_system_prompt(DEV_USER_ID)
-    completion = await client.chat.completions.create(
-        model=MODEL,
-        messages=[
-            {"role": "system", "content": sys_prompt},
-            *payload.history,
-            {"role": "user", "content": user_text}
-        ]
-    )
-    reply = completion.choices[0].message.content
-    return {"response": reply}
-    import urllib.parse
-from pydantic import BaseModel
-from typing import List, Dict, Any
-
-# ChatIn schema જો ઉપર ના હોય તો
-class ChatIn(BaseModel):
-    message: str
-    history: List[Dict[str, Any]] = []
-
-def generate_image_url(prompt: str) -> str:
-    encoded_prompt = urllib.parse.quote(prompt)
-    return f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1024&height=1024&nologo=true"
-
-@app.post("/chat")
-async def chat_endpoint(payload: ChatIn):
-    user_text = payload.message
-
-    # ૧. ઈમેજ જનરેશન લોજિક
-    image_keywords = ["create a photo", "generate image", "draw", "make a photo", "photo of", "image of", "create photo", "photo", "image", "picture"]
-    if any(keyword in user_text.lower() for keyword in image_keywords):
-        img_url = generate_image_url(user_text)
-        return {"response": f"Here is your generated image:\n\n![Generated Image]({img_url})"}
-
-    # ૨. LLM ટેક્સ્ટ રિસ્પોન્સ
-    try:
-        sys_prompt, _ = await build_system_prompt(DEV_USER_ID)
-        completion = await client.chat.completions.create(
-            model=MODEL,
-            messages=[
-                {"role": "system", "content": sys_prompt},
-                *payload.history,
-                {"role": "user", "content": user_text}
-            ]
-        )
-        reply = completion.choices[0].message.content
-        return {"response": reply}
-    except Exception as e:
-        return {"response": f"Error processing request: {str(e)}"}
+    user_id = DEV_USER_ID
+    system, memory_enabled = await build_system_prompt(user_id)
+    # ... બાકીનો તમારો જૂનો Groq નો કોડ એમ જ રહેશે ...
