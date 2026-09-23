@@ -119,8 +119,17 @@ async def build_system_prompt(user_id: str) -> tuple[str, bool]:
               .replace("{{timezone}}", prof["timezone"])
               .replace("{{now_local}}", now_local)
               .replace("{{retrieved_memories}}", memories))
-    return prompt, prof["memory_enabled"]
 
+    # 🌟 આ લાઈનો ઉમેરો (જેથી AI Table કે <br> વગર ક્લીન bullet points આપશે)
+    prompt += """
+
+FORMATTING RULES:
+1. NEVER use Markdown tables (do NOT use '|' or '---|---' syntax).
+2. NEVER output raw HTML tags like <br>.
+3. Always structure details using clean bullet points (•) and bold titles for maximum readability.
+"""
+
+    return prompt, prof["memory_enabled"]
 
 # ---------------------------------------------------------------
 # Simple passcode gate (stop-gap until real user login is added)
