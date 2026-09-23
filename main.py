@@ -223,7 +223,6 @@ async def chat(body: ChatIn):
             "images": [],
             "pending": []
         }
-        }
     user_id = DEV_USER_ID
     system, memory_enabled = await build_system_prompt(user_id)
     tools = [t for t in GROQ_TOOLS if memory_enabled or t["function"]["name"] != "save_memory"]
