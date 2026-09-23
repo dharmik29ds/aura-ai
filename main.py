@@ -166,20 +166,50 @@ async def login():
 @app.post("/chat", dependencies=[Depends(require_passcode)])
 async def chat(body: ChatIn):
     user_text = body.message.strip()
-
-# Universal High-Quality Image Generator Trigger
+# ✅ નવો અને પાવરફુલ ઈમેજ ટ્રીગર અને પ્રોમ્પટ ક્લિનિંગ કોડ (Line 170 થી શરૂ)
+    
+    # મુખ્ય ટ્રીગર શબ્દો (Image types, actions, and formats included)
     image_trigger_words = [
         "photo", "image", "picture", "draw", "generate", "create", 
-        "wallpaper", "art", "painting", "sketch", "make", "pic"
+        "wallpaper", "art", "painting", "sketch", "make", "pic",
+        ".jpg", ".png", ".webp", ".jpeg", "jpg", "png", "jpeg" # common formats
     ]
 
-    if any(word in user_text.lower() for word in image_trigger_words):
-        encoded_prompt = urllib.parse.quote(user_text)
-        # model=flux ઉમેરવાથી એકદમ Real HD ક્વોલિટી ફોટો બનશે
+    # પ્રોમ્પટમાંથી હટાવવાના વધારાના શબ્દો (ફાઈલ ફોર્મેટ અને "file")
+    # જેથી "draw a tiger .jpg file" લખો તો પણ એ "tiger" પરથી જ ફોટો બનાવે
+    words_to_strip = [
+        ".jpg", ".png", ".webp", ".jpeg", 
+        "jpg", "png", "jpeg", "file", 
+        "file ma", "file na", "format ma", "format na"
+    ]
+
+    # પ્રોમ્પટને ક્લીન કરવાનો અને આઈડેન્ટીફાઈ કરવાનો લોજિક
+    is_image_request = any(word in user_text.lower() for word in image_trigger_words)
+    cleaned_user_text = user_text
+    
+    if is_image_request:
+        # જો ઈમેજ માંગ્યો હોય, તો વધારાના ફોર્મેટ શબ્દો હટાવીને પ્રોમ્પટ સાફ કરો
+        for word in words_to_strip:
+            cleaned_user_text = cleaned_user_text.replace(word, ' ').replace(word.upper(), ' ')
+        
+        # URL encode clean prompt (clean = focusing only on content)
+        encoded_prompt = urllib.parse.quote(cleaned_user_text.strip())
+        
+        # model=flux for highest quality HD image
         img_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1024&height=1024&model=flux&nologo=true"
-
+        
         reply_msg = f"Here is your generated image:\n\n![Generated Image]({img_url})"
+        
+        return {
+            "response": reply_msg,
+            "reply": reply_msg,
+            "images": [img_url],
+            "pending": [],
+            "pending_actions": []
+        }
+    # 👇 અહીં સુધી મૂકો (Lines replace કર્યા પછી નીચેથી "user_id = DEV_USER_ID" ચાલુ થવું જોઈએ)
 
+    # ૨. સામાન્ય ચેટ અને AI ટૂલ્સ
         return {
             "response": reply_msg,
             "reply": reply_msg,
