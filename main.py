@@ -14,6 +14,7 @@ import json
 import os
 import secrets
 import time
+import urllib.parse
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
@@ -22,6 +23,7 @@ from zoneinfo import ZoneInfo
 import asyncpg
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from openai import AsyncOpenAI          # Groq is OpenAI-compatible
 from pydantic import BaseModel
 
@@ -73,12 +75,9 @@ async def lifespan(app: FastAPI):
     await pool.close()
 
 
-
-
 async def reminder_loop():
     """Runs forever in the background: every TELEGRAM_POLL_SECONDS, sends
-    any reminder whose time has arrived, then marks it sent (or reschedules
-    recurring ones would need extra logic -- kept simple here for now)."""
+    any reminder whose time has arrived, then marks it sent."""
     while True:
         try:
             due = await pool.fetch(
@@ -103,6 +102,7 @@ async def reminder_loop():
 
 
 app = FastAPI(lifespan=lifespan)
+app.mount("/static", StaticFiles(directory=BASE / "static"), name="static")
 
 
 async def build_system_prompt(user_id: str) -> tuple[str, bool]:
@@ -120,7 +120,6 @@ async def build_system_prompt(user_id: str) -> tuple[str, bool]:
               .replace("{{now_local}}", now_local)
               .replace("{{retrieved_memories}}", memories))
     return prompt, prof["memory_enabled"]
-
 
 
 # ---------------------------------------------------------------
@@ -166,6 +165,22 @@ async def login():
 
 @app.post("/chat", dependencies=[Depends(require_passcode)])
 async def chat(body: ChatIn):
+    user_text = body.message.strip()
+
+    # ૧. ઈમેજ જનરેશન કીવર્ડ ચેક
+    image_keywords = ["photo", "image", "draw", "picture", "create photo", "generate image", "make photo", "picture of"]
+    if any(keyword in user_text.lower() for keyword in image_keywords):
+        encoded_prompt = urllib.parse.quote(user_text)
+        img_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1024&height=1024&nologo=true"
+        return {
+            "response": f"Here is your generated image:\n\n![Generated Image]({img_url})",
+            "reply": f"Here is your generated image:\n\n![Generated Image]({img_url})",
+            "images": [img_url],
+            "pending": [],
+            "pending_actions": []
+        }
+
+    # ૨. સામાન્ય ચેટ અને AI ટૂલ્સ
     user_id = DEV_USER_ID
     system, memory_enabled = await build_system_prompt(user_id)
     tools = [t for t in GROQ_TOOLS if memory_enabled or t["function"]["name"] != "save_memory"]
@@ -184,10 +199,6 @@ async def chat(body: ChatIn):
                 resp = await client.chat.completions.create(
                     model=MODEL, messages=messages, tools=tools, max_tokens=1024)
             except Exception as e:
-                # Some models occasionally hallucinate a tool name that
-                # wasn't offered (e.g. calling "search" when only
-                # "web_search"/"image_search" exist). Retry once without
-                # tools rather than failing the whole request.
                 if "tool call validation failed" in str(e).lower() and tools:
                     print(f"[groq tool-name error, retrying without tools] {e!r}")
                     resp = await client.chat.completions.create(
@@ -222,22 +233,29 @@ async def chat(body: ChatIn):
                 messages.append({"role": "tool", "tool_call_id": tc.id, "content": json.dumps(out)})
     except Exception as e:
         print(f"[groq error] {e!r}")
-        return {"reply": "Sorry, I couldn't reach the AI service. Check your GROQ_API_KEY and "
-                         "the terminal for details, then try again.", "pending_actions": []}
+        err_msg = "Sorry, I couldn't reach the AI service. Check your GROQ_API_KEY and terminal logs."
+        return {
+            "response": err_msg,
+            "reply": err_msg,
+            "pending_actions": [],
+            "pending": [],
+            "images": []
+        }
 
-    return {"reply": reply_text or "Done.", "pending_actions": pending, "images": images}
-
-
+    return {
+        "response": reply_text or "Done.",
+        "reply": reply_text or "Done.",
+        "pending_actions": pending,
+        "pending": pending,
+        "images": images
+    }
 
 
 @app.api_route("/telegram/link", methods=["GET", "POST"], dependencies=[Depends(require_passcode)])
 async def telegram_link():
-    """Call this once, right after you have messaged your bot on Telegram,
-    to save your chat_id against the dev user's profile."""
     chat_id = await telegram.get_latest_chat_id()
     if not chat_id:
-        raise HTTPException(400, "No recent message found. Send your bot any message on "
-                                 "Telegram first, then try this again.")
+        raise HTTPException(400, "No recent message found. Send your bot any message on Telegram first, then try this again.")
     await pool.execute(
         "update profiles set telegram_chat_id = $1, updated_at = now() where id = $2",
         chat_id, DEV_USER_ID)
