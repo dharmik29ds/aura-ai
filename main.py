@@ -167,14 +167,22 @@ async def login():
 async def chat(body: ChatIn):
     user_text = body.message.strip()
 
-    # ૧. ઈમેજ જનરેશન કીવર્ડ ચેક
-    image_keywords = ["photo", "image", "draw", "picture", "create photo", "generate image", "make photo", "picture of"]
-    if any(keyword in user_text.lower() for keyword in image_keywords):
+# Universal High-Quality Image Generator Trigger
+    image_trigger_words = [
+        "photo", "image", "picture", "draw", "generate", "create", 
+        "wallpaper", "art", "painting", "sketch", "make", "pic"
+    ]
+
+    if any(word in user_text.lower() for word in image_trigger_words):
         encoded_prompt = urllib.parse.quote(user_text)
-        img_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1024&height=1024&nologo=true"
+        # model=flux ઉમેરવાથી એકદમ Real HD ક્વોલિટી ફોટો બનશે
+        img_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1024&height=1024&model=flux&nologo=true"
+
+        reply_msg = f"Here is your generated image:\n\n![Generated Image]({img_url})"
+
         return {
-            "response": f"Here is your generated image:\n\n![Generated Image]({img_url})",
-            "reply": f"Here is your generated image:\n\n![Generated Image]({img_url})",
+            "response": reply_msg,
+            "reply": reply_msg,
             "images": [img_url],
             "pending": [],
             "pending_actions": []
