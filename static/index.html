@@ -8,6 +8,41 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;700&display=swap">
 <style>
   :root {
+    --ink: #059669;
+    --paper: #040d12;
+    --card: rgba(255, 255, 255, 0.05);
+    --teal: #10b981;
+    --teal-dark: #059669;
+    --muted: #64748b;
+    --line: rgba(52, 211, 153, 0.2);
+    --font: "Plus Jakarta Sans", system-ui, -apple-system, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { 
+    background: radial-gradient(circle at top center, #062e26, #040d12); 
+    color: #e2e8f0; 
+    font-family: var(--font); 
+    font-size: 16px; 
+    line-height: 1.55; 
+  }
+  .app { max-width: 760px; height: 100%; margin: 0 auto; display: flex; flex-direction: column; }
+
+  header { padding: 18px 20px 14px; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 12px; }
+  .brand-title { 
+    font-size: 22px; 
+    font-weight: 800; 
+    background: linear-gradient(135deg, #10b981, #34d399, #3b82f6); 
+    -webkit-background-clip: text; 
+    -webkit-text-fill-color: transparent; 
+    margin: 0; 
+  }
+  
+  #log { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 14px; }
+  .msg { max-width: 82%; padding: 11px 15px; border-radius: 16px; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .msg.user { align-self: flex-end; background: linear-gradient(135deg, #059669, #10b981); color: #fff; border-bottom-right-radius: 4px; box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3); }
+  .msg.aura { align-self: flex-start; background: var(--card); border: 1px solid var(--line); border-bottom-left-radius: 4px; color: #e2e8f0; backdrop-filter: blur(12px); }
+  :root {
     --ink: #16213E; --paper: #F1F4F8; --card: #FFFFFF;
     --teal: #0E7C86; --teal-dark: #0A5F67; --muted: #5B6577;
     --line: #D9DFE8; --danger: #B3261E;
