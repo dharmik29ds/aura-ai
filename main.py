@@ -30,6 +30,7 @@ import telegram
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 DATABASE_URL = os.getenv("DATABASE_URL")
 MODEL = os.getenv("MODEL", "openai/gpt-oss-120b")
+MODEL_VISION = os.getenv("MODEL_VISION", "meta-llama/llama-4-scout-17b-16e-instruct")
 SUPABASE_URL = os.getenv("SUPABASE_URL")           # e.g. https://xxxx.supabase.co
 SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY")
 TELEGRAM_POLL_SECONDS = 30
@@ -100,11 +101,12 @@ async def require_user(authorization: str | None = Header(default=None)) -> str:
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(401, "Not logged in.")
     token = authorization.removeprefix("Bearer ").strip()
+    anon_key = (SUPABASE_ANON_KEY or "").strip()
     try:
         async with httpx.AsyncClient(timeout=10) as http_client:
             r = await http_client.get(
-                f"{SUPABASE_URL}/auth/v1/user",
-                headers={"Authorization": f"Bearer {token}", "apikey": SUPABASE_ANON_KEY},
+                f"{SUPABASE_URL.strip()}/auth/v1/user",
+                headers={"Authorization": f"Bearer {token}", "apikey": anon_key},
             )
     except Exception as e:
         print(f"[auth] Supabase reach error: {e!r}")
@@ -146,6 +148,8 @@ async def build_system_prompt(user_id: str) -> tuple[str, bool]:
 class ChatIn(BaseModel):
     message: str
     history: list[dict] = []
+    image_base64: str | None = None   # data-URL-ready base64 (no prefix), for an uploaded photo
+    image_mime: str | None = None     # e.g. "image/jpeg"
 
 
 @app.get("/")
@@ -176,6 +180,29 @@ async def chat(body: ChatIn, user_id: str = Depends(require_user)):
     pending = []
     images = []
     reply_text = ""
+
+    # An uploaded photo is handled as its own single turn with a vision
+    # model: describe/analyze the image, no tool-calling loop needed.
+    if body.image_base64:
+        try:
+            vresp = await client.chat.completions.create(
+                model=MODEL_VISION,
+                max_tokens=1024,
+                messages=[
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": [
+                        {"type": "text", "text": body.message or "What's in this photo?"},
+                        {"type": "image_url", "image_url": {
+                            "url": f"data:{body.image_mime or 'image/jpeg'};base64,{body.image_base64}"}},
+                    ]},
+                ],
+            )
+            reply_text = vresp.choices[0].message.content or ""
+        except Exception as e:
+            print(f"[groq vision error] {e!r}")
+            reply_text = ("Sorry, I couldn't read that image. The vision model may be "
+                          "unavailable right now -- try again in a moment.")
+        return {"reply": reply_text or "Done.", "pending_actions": [], "images": []}
 
     try:
         for i in range(6):
