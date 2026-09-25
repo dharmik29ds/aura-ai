@@ -1,434 +1,405 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Aura AI</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap">
-  <style>
-    :root {
-      --ink: #e2e8f0;
-      --paper: #040d12;
-      --card: rgba(255, 255, 255, 0.05);
-      --teal: #10b981;
-      --teal-dark: #059669;
-      --muted: #94a3b8;
-      --line: rgba(52, 211, 153, 0.2);
-      --font: "Plus Jakarta Sans", system-ui, -apple-system, sans-serif;
-    }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aura</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;700&display=swap">
+<style>
+  :root {
+    --ink: #059669;
+    --paper: #040d12;
+    --card: rgba(255, 255, 255, 0.05);
+    --teal: #10b981;
+    --teal-dark: #059669;
+    --muted: #64748b;
+    --line: rgba(52, 211, 153, 0.2);
+    --font: "Plus Jakarta Sans", system-ui, -apple-system, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { 
+    background: radial-gradient(circle at top center, #062e26, #040d12); 
+    color: #e2e8f0; 
+    font-family: var(--font); 
+    font-size: 16px; 
+    line-height: 1.55; 
+  }
+  .app { max-width: 760px; height: 100%; margin: 0 auto; display: flex; flex-direction: column; }
 
-    * { box-sizing: border-box; }
-    html, body { height: 100%; margin: 0; padding: 0; }
+  header { padding: 18px 20px 14px; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 12px; }
+  .brand-title { 
+    font-size: 22px; 
+    font-weight: 800; 
+    background: linear-gradient(135deg, #10b981, #34d399, #3b82f6); 
+    -webkit-background-clip: text; 
+    -webkit-text-fill-color: transparent; 
+    margin: 0; 
+  }
+  
+  #log { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 14px; }
+  .msg { max-width: 82%; padding: 11px 15px; border-radius: 16px; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .msg.user { align-self: flex-end; background: linear-gradient(135deg, #059669, #10b981); color: #fff; border-bottom-right-radius: 4px; box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3); }
+  .msg.aura { align-self: flex-start; background: var(--card); border: 1px solid var(--line); border-bottom-left-radius: 4px; color: #e2e8f0; backdrop-filter: blur(12px); }
+  :root {
+    --ink: #16213E; --paper: #F1F4F8; --card: #FFFFFF;
+    --teal: #0E7C86; --teal-dark: #0A5F67; --muted: #5B6577;
+    --line: #D9DFE8; --danger: #B3261E;
+    --font: "Plus Jakarta Sans", system-ui, -apple-system, "Segoe UI", "Noto Sans Devanagari", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { background: var(--paper); color: var(--ink); font-family: var(--font); font-size: 16px; line-height: 1.55; }
+  .app { max-width: 760px; height: 100%; margin: 0 auto; display: flex; flex-direction: column; }
 
-    body {
-      background: radial-gradient(circle at top center, #062e26, #040d12) !important;
-      color: #e2e8f0;
-      font-family: var(--font);
-      font-size: 16px;
-      line-height: 1.55;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      min-height: 100vh;
-    }
+  header { padding: 18px 20px 14px; border-bottom: 1px solid var(--line); display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+  header h1 { margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -0.01em; }
+  header .sub { color: var(--muted); font-size: 14px; }
+  header .who { display: flex; align-items: center; gap: 10px; }
+  header .who span { font-size: 14px; color: var(--muted); }
+  header button.link { background: none; border: none; color: var(--teal); font-size: 14px; cursor: pointer; padding: 0; }
 
-    .app-container {
-      width: 100%;
-      max-width: 800px;
-      height: 90vh;
-      background: rgba(15, 23, 42, 0.65);
-      border: 1px solid var(--line);
-      backdrop-filter: blur(20px);
-      border-radius: 24px;
-      display: flex;
-      flex-direction: column;
-      box-shadow: 0 20px 50px rgba(0,0,0,0.6);
-      overflow: hidden;
-      margin: 20px;
-    }
+  #log { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 14px; }
+  .msg { max-width: 82%; padding: 11px 15px; border-radius: 16px; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .msg.user { align-self: flex-end; background: var(--ink); color: #fff; border-bottom-right-radius: 4px; }
+  .msg.aura { align-self: flex-start; background: var(--card); border: 1px solid var(--line); border-bottom-left-radius: 4px; }
+  .msg.pending { color: var(--muted); }
 
-    header {
-      padding: 18px 24px;
-      border-bottom: 1px solid var(--line);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      background: rgba(6, 24, 27, 0.4);
-    }
+  .imgs { align-self: flex-start; max-width: 82%; display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .imgs img { width: 100%; height: 110px; object-fit: cover; border-radius: 12px; border: 1px solid var(--line); background: var(--card); }
 
-    .header-brand {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
+  .confirm { align-self: flex-start; max-width: 82%; background: var(--card); border: 1px solid var(--danger); border-radius: 12px; padding: 14px 16px; }
+  .confirm p { margin: 0 0 12px; }
+  .confirm .row { display: flex; gap: 10px; }
+  .confirm.done { border-color: var(--line); color: var(--muted); }
 
-    .brand-title {
-      font-size: 22px;
-      font-weight: 800;
-      background: linear-gradient(135deg, #10b981, #34d399, #3b82f6);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      margin: 0;
-    }
+  button { font-family: inherit; font-size: 15px; border-radius: 10px; cursor: pointer; padding: 9px 16px; border: 1px solid var(--line); background: var(--card); color: var(--ink); }
+  button.danger { background: var(--danger); border-color: var(--danger); color: #fff; }
+  button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px solid var(--teal); outline-offset: 2px; }
 
-    .user-info {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      font-size: 14px;
-      color: var(--muted);
-    }
+  .empty { margin: auto 0; }
+  .empty h2 { font-size: 26px; margin: 0 0 6px; letter-spacing: -0.01em; }
+  .empty p { margin: 0 0 18px; color: var(--muted); }
+  .chips { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+  .chip { text-align: left; }
+  .chip:hover { border-color: var(--teal); }
 
-    .logout-btn {
-      background: none;
-      border: 1px solid var(--line);
-      color: var(--teal);
-      cursor: pointer;
-      font-weight: 600;
-      padding: 4px 12px;
-      border-radius: 8px;
-    }
+  form#form { display: flex; gap: 10px; padding: 14px 20px 20px; border-top: 1px solid var(--line); }
+  textarea { flex: 1; resize: none; font-family: inherit; font-size: 16px; padding: 11px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); color: var(--ink); max-height: 140px; }
+  #send { background: var(--teal); border-color: var(--teal); color: #fff; font-weight: 500; padding: 0 22px; }
+  #send:hover { background: var(--teal-dark); }
+  #send:disabled { opacity: .55; cursor: default; }
 
-    /* Auth View */
-    .auth-box {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 40px 20px;
-      text-align: center;
-    }
+  /* auth screen */
+  #auth { position: fixed; inset: 0; background: var(--paper); display: flex; align-items: center; justify-content: center; padding: 20px; z-index: 10; }
+  #auth[hidden] { display: none; }
+  .authbox { width: 100%; max-width: 360px; }
+  .authbox h2 { font-size: 26px; margin: 0 0 6px; letter-spacing: -0.01em; }
+  .authbox p.sub { margin: 0 0 20px; color: var(--muted); }
+  .authbox input { width: 100%; font-family: inherit; font-size: 16px; padding: 11px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); color: var(--ink); margin-bottom: 10px; }
+  .authbox button[type="submit"] { width: 100%; background: var(--teal); border-color: var(--teal); color: #fff; font-weight: 500; padding: 11px; margin-top: 4px; }
+  .authbox .switch { margin-top: 16px; font-size: 14px; color: var(--muted); text-align: center; }
+  .authbox .switch button { background: none; border: none; color: var(--teal); cursor: pointer; padding: 0; font: inherit; }
+  .autherr { margin: 10px 0 0; color: var(--danger); font-size: 14px; min-height: 1.4em; }
 
-    .auth-box h2 {
-      font-size: 28px;
-      font-weight: 800;
-      margin-bottom: 8px;
-      background: linear-gradient(135deg, #10b981, #34d399, #3b82f6);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-    }
 
-    .auth-box p { color: var(--muted); margin-bottom: 24px; }
+  form#form { align-items: flex-end; }
+  #attachBtn { width: 44px; height: 44px; flex: 0 0 auto; display: flex; align-items: center; justify-content: center; font-size: 20px; padding: 0; }
+  #filePreview { display: none; align-items: center; gap: 10px; padding: 10px 20px; border-top: 1px solid var(--line); background: var(--card); }
+  #filePreview.show { display: flex; }
+  #filePreview img { width: 44px; height: 44px; object-fit: cover; border-radius: 8px; border: 1px solid var(--line); }
+  #filePreview span { flex: 1; font-size: 14px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #filePreview button { padding: 4px 10px; font-size: 13px; }
 
-    .auth-form {
-      width: 100%;
-      max-width: 340px;
-      display: flex;
-      flex-direction: column;
-      gap: 14px;
-    }
-
-    .auth-form input {
-      width: 100%;
-      padding: 12px 16px;
-      background: rgba(255, 255, 255, 0.05);
-      border: 1px solid var(--line);
-      border-radius: 12px;
-      color: #fff;
-      font-size: 15px;
-      outline: none;
-    }
-
-    .auth-form input:focus {
-      border-color: var(--teal);
-      box-shadow: 0 0 10px rgba(16, 185, 129, 0.3);
-    }
-
-    .auth-form button {
-      padding: 12px;
-      background: linear-gradient(135deg, #059669, #10b981);
-      color: white;
-      border: none;
-      border-radius: 12px;
-      font-weight: 700;
-      cursor: pointer;
-      box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3);
-    }
-
-    /* Chat View */
-    .chat-view {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-    }
-
-    #log {
-      flex: 1;
-      overflow-y: auto;
-      padding: 24px;
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-    }
-
-    .welcome-prompt {
-      text-align: center;
-      margin: auto 0;
-      padding: 20px;
-    }
-
-    .welcome-prompt h2 {
-      font-size: 26px;
-      font-weight: 800;
-      margin-bottom: 8px;
-      color: #f1f5f9;
-    }
-
-    .welcome-prompt p {
-      color: var(--muted);
-      margin-bottom: 20px;
-    }
-
-    .suggestions {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      max-width: 420px;
-      margin: 0 auto;
-    }
-
-    .chip {
-      background: rgba(255, 255, 255, 0.04);
-      border: 1px solid var(--line);
-      padding: 12px 16px;
-      border-radius: 12px;
-      color: #cbd5e1;
-      font-size: 14px;
-      cursor: pointer;
-      text-align: left;
-      transition: all 0.2s;
-    }
-
-    .chip:hover {
-      background: rgba(16, 185, 129, 0.1);
-      border-color: var(--teal);
-      color: #fff;
-    }
-
-    .msg {
-      max-width: 82%;
-      padding: 12px 18px;
-      border-radius: 18px;
-      white-space: pre-wrap;
-      overflow-wrap: anywhere;
-      font-size: 15px;
-      line-height: 1.6;
-    }
-
-    .msg.user {
-      align-self: flex-end;
-      background: linear-gradient(135deg, #059669, #10b981);
-      color: #ffffff;
-      border-bottom-right-radius: 4px;
-      box-shadow: 0 4px 15px rgba(16, 185, 129, 0.25);
-    }
-
-    .msg.aura {
-      align-self: flex-start;
-      background: rgba(255, 255, 255, 0.05);
-      border: 1px solid var(--line);
-      border-bottom-left-radius: 4px;
-      color: #e2e8f0;
-      backdrop-filter: blur(12px);
-    }
-
-    /* Input Bar */
-    .input-bar {
-      padding: 16px 24px;
-      border-top: 1px solid var(--line);
-      display: flex;
-      gap: 12px;
-      background: rgba(6, 24, 27, 0.4);
-    }
-
-    .input-bar textarea {
-      flex: 1;
-      background: rgba(255, 255, 255, 0.05);
-      border: 1px solid var(--line);
-      border-radius: 14px;
-      padding: 12px 16px;
-      color: #fff;
-      font-family: var(--font);
-      font-size: 15px;
-      resize: none;
-      height: 48px;
-      outline: none;
-    }
-
-    .input-bar textarea:focus {
-      border-color: var(--teal);
-    }
-
-    .send-btn {
-      background: linear-gradient(135deg, #059669, #10b981);
-      color: white;
-      border: none;
-      border-radius: 14px;
-      padding: 0 24px;
-      font-weight: 700;
-      cursor: pointer;
-      box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3);
-    }
-
-    .hidden { display: none !important; }
-  </style>
+  @media (prefers-reduced-motion: no-preference) { .msg { animation: in .18s ease-out; } @keyframes in { from { opacity: 0; transform: translateY(4px); } } }
+</style>
 </head>
 <body>
 
-  <div class="app-container">
-    <header>
-      <div class="header-brand">
-        <svg width="38" height="38" viewBox="0 0 100 100" fill="none">
-          <defs>
-            <linearGradient id="auraGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stop-color="#10B981" />
-              <stop offset="100%" stop-color="#3B82F6" />
-            </linearGradient>
-          </defs>
-          <rect width="100" height="100" rx="24" fill="#06181B"/>
-          <circle cx="50" cy="50" r="30" stroke="url(#auraGrad)" stroke-width="6" stroke-dasharray="140 40"/>
-          <circle cx="50" cy="50" r="12" fill="url(#auraGrad)"/>
-        </svg>
-        <h1 class="brand-title">Aura</h1>
-      </div>
-      <div id="userHeader" class="user-info hidden">
-        <span id="userEmail"></span>
-        <button class="logout-btn" onclick="logout()">Log out</button>
-      </div>
-    </header>
-
-    <!-- AUTH SCREEN -->
-    <div id="authScreen" class="auth-box">
-      <h2>Welcome to Aura</h2>
-      <p id="authSub">Enter your access credentials to continue.</p>
-      <form class="auth-form" onsubmit="handleAuth(event)">
-        <input type="text" id="emailInput" placeholder="Username / Email" required>
-        <input type="password" id="passInput" placeholder="Password" required>
-        <button type="submit">Continue to Chat</button>
-      </form>
+<div id="auth">
+  <div class="authbox">
+    <h2 id="authTitle">Welcome to Aura</h2>
+    <p class="sub" id="authSub">Log in to your account.</p>
+    <form id="authForm">
+      <input id="authName" type="text" placeholder="Your name" autocomplete="name" hidden>
+      <input id="authEmail" type="email" placeholder="Email" autocomplete="email" required>
+      <input id="authPass" type="password" placeholder="Password" autocomplete="current-password" required>
+      <button type="submit" id="authSubmit">Log in</button>
+      <p class="autherr" id="authErr" role="alert"></p>
+    </form>
+    <div class="switch">
+      <span id="switchText">New here?</span> <button type="button" id="switchBtn">Create an account</button>
     </div>
+  </div>
+</div>
 
-    <!-- CHAT SCREEN -->
-    <div id="chatScreen" class="chat-view hidden">
-      <div id="log">
-        <div id="welcomePrompt" class="welcome-prompt">
-          <h2>What can I do for you?</h2>
-          <p>Try one of these, or type anything.</p>
-          <div class="suggestions">
-            <div class="chip" onclick="useSuggestion(this.innerText)">Kal subah 7 baje gym ka reminder set karo</div>
-            <div class="chip" onclick="useSuggestion(this.innerText)">Save a note: Ask Priya about the venue booking</div>
-            <div class="chip" onclick="useSuggestion(this.innerText)">Show my reminders</div>
-          </div>
-        </div>
+<div class="app">
+  <header>
+    <div><h1>Aura</h1><div class="sub">Notes, reminders, and answers in English, Hindi, or Hinglish</div></div>
+    <div class="who"><span id="whoami"></span><button class="link" id="logoutBtn" hidden>Log out</button></div>
+  </header>
+
+  <div id="log" aria-live="polite">
+    <div class="empty" id="empty">
+      <h2>What can I do for you?</h2>
+      <p>Try one of these, or type anything.</p>
+      <div class="chips">
+        <button class="chip" type="button">Kal subah 7 baje gym ka reminder set karo</button>
+        <button class="chip" type="button">Save a note: Ask Priya about the venue booking</button>
+        <button class="chip" type="button">Remember that I prefer replies in Hinglish</button>
+        <button class="chip" type="button">Show my reminders</button>
       </div>
-
-      <form class="input-bar" onsubmit="sendMessage(event)">
-        <textarea id="userInput" placeholder="Type your message..." onkeydown="checkEnter(event)"></textarea>
-        <button type="submit" class="send-btn">Send</button>
-      </form>
     </div>
   </div>
 
-  <script>
-    let token = localStorage.getItem('aura_token') || "";
-    let currentUser = localStorage.getItem('aura_user') || "";
+  <div id="filePreview">
+    <img id="filePreviewImg" alt="">
+    <span id="filePreviewName"></span>
+    <button type="button" id="fileRemove">Remove</button>
+  </div>
+  <form id="form">
+    <input type="file" id="fileInput" accept="image/*" hidden>
+    <button type="button" id="attachBtn" title="Attach a photo" aria-label="Attach a photo">📎</button>
+    <textarea id="input" rows="1" placeholder="Message Aura" aria-label="Message Aura"></textarea>
+    <button id="send" type="submit">Send</button>
+  </form>
+</div>
 
-    if (token) {
-      showChat(currentUser);
+<script>
+  const log = document.getElementById('log');
+  const form = document.getElementById('form');
+  const input = document.getElementById('input');
+  const send = document.getElementById('send');
+  let history = [];
+  let pendingFile = null; // { base64, mime, name }
+
+  const fileInput = document.getElementById('fileInput');
+  const attachBtn = document.getElementById('attachBtn');
+  const filePreview = document.getElementById('filePreview');
+  const filePreviewImg = document.getElementById('filePreviewImg');
+  const filePreviewName = document.getElementById('filePreviewName');
+  const fileRemove = document.getElementById('fileRemove');
+
+  attachBtn.addEventListener('click', () => fileInput.click());
+  fileInput.addEventListener('change', () => {
+    const f = fileInput.files[0];
+    if (!f) return;
+    if (!f.type.startsWith('image/')) { alert('Please choose an image file.'); return; }
+    if (f.size > 8 * 1024 * 1024) { alert('That image is too large (max 8MB).'); return; }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result; // "data:image/jpeg;base64,...."
+      const base64 = dataUrl.split(',')[1];
+      pendingFile = { base64, mime: f.type, name: f.name };
+      filePreviewImg.src = dataUrl;
+      filePreviewName.textContent = f.name;
+      filePreview.classList.add('show');
+    };
+    reader.readAsDataURL(f);
+  });
+  fileRemove.addEventListener('click', () => {
+    pendingFile = null;
+    fileInput.value = '';
+    filePreview.classList.remove('show');
+  });
+  let config = null;
+  let session = null; // { access_token, user: {id, email, user_metadata} }
+
+  try { const saved = sessionStorage.getItem('aura_session'); if (saved) session = JSON.parse(saved); } catch (e) {}
+
+  const authEl = document.getElementById('auth');
+  const authForm = document.getElementById('authForm');
+  const authTitle = document.getElementById('authTitle');
+  const authSub = document.getElementById('authSub');
+  const authName = document.getElementById('authName');
+  const authEmail = document.getElementById('authEmail');
+  const authPass = document.getElementById('authPass');
+  const authSubmit = document.getElementById('authSubmit');
+  const authErr = document.getElementById('authErr');
+  const switchText = document.getElementById('switchText');
+  const switchBtn = document.getElementById('switchBtn');
+  const whoami = document.getElementById('whoami');
+  const logoutBtn = document.getElementById('logoutBtn');
+  let mode = 'login'; // or 'signup'
+
+  function setMode(m) {
+    mode = m;
+    if (m === 'signup') {
+      authTitle.textContent = 'Create your account';
+      authSub.textContent = 'Aura will remember your name and keep your notes private to you.';
+      authName.hidden = false;
+      authSubmit.textContent = 'Create account';
+      switchText.textContent = 'Already have an account?';
+      switchBtn.textContent = 'Log in';
+    } else {
+      authTitle.textContent = 'Welcome to Aura';
+      authSub.textContent = 'Log in to your account.';
+      authName.hidden = true;
+      authSubmit.textContent = 'Log in';
+      switchText.textContent = 'New here?';
+      switchBtn.textContent = 'Create an account';
     }
+    authErr.textContent = '';
+  }
+  switchBtn.addEventListener('click', () => setMode(mode === 'login' ? 'signup' : 'login'));
 
-    async function handleAuth(e) {
-      e.preventDefault();
-      const username = document.getElementById('emailInput').value;
-      const password = document.getElementById('passInput').value;
+  async function api(url, opts = {}) {
+    opts.headers = Object.assign({}, opts.headers, session ? { 'Authorization': 'Bearer ' + session.access_token } : {});
+    const r = await fetch(url, opts);
+    if (r.status === 401) { showAuth(); }
+    return r;
+  }
 
-      // Generates access token or stores auth info
-      token = btoa(`${username}:${password}`);
-      currentUser = username;
+  function showAuth() {
+    session = null;
+    try { sessionStorage.removeItem('aura_session'); } catch (e) {}
+    authEl.hidden = false;
+    logoutBtn.hidden = true;
+    whoami.textContent = '';
+  }
 
-      localStorage.setItem('aura_token', token);
-      localStorage.setItem('aura_user', currentUser);
-      showChat(currentUser);
-    }
+  function showApp() {
+    authEl.hidden = true;
+    logoutBtn.hidden = false;
+    whoami.textContent = (session.user.user_metadata && session.user.user_metadata.full_name) || session.user.email || '';
+    input.focus();
+  }
 
-    function showChat(email) {
-      document.getElementById('authScreen').classList.add('hidden');
-      document.getElementById('chatScreen').classList.remove('hidden');
-      document.getElementById('userHeader').classList.remove('hidden');
-      document.getElementById('userEmail').innerText = email;
-    }
-
-    function logout() {
-      localStorage.clear();
-      location.reload();
-    }
-
-    function useSuggestion(text) {
-      document.getElementById('userInput').value = text;
-      sendMessage(new Event('submit'));
-    }
-
-    function checkEnter(e) {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        sendMessage(e);
-      }
-    }
-
-    async function sendMessage(e) {
-      e.preventDefault();
-      const input = document.getElementById('userInput');
-      const text = input.value.trim();
-      if (!text) return;
-
-      document.getElementById('welcomePrompt')?.remove();
-      appendMsg(text, 'user');
-      input.value = '';
-
-      const pendingDiv = appendMsg('Aura is thinking...', 'aura pending');
-
-      try {
-        const res = await fetch('/chat', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify({ 
-            message: text,
-            prompt: text,
-            user_id: currentUser
-          })
-        });
-
-        if (!res.ok) {
-          const errData = await res.json().catch(() => ({}));
-          pendingDiv.innerText = errData.detail || 'Error processing request.';
-          pendingDiv.classList.remove('pending');
+  authForm.addEventListener('submit', async e => {
+    e.preventDefault();
+    authErr.textContent = '';
+    authSubmit.disabled = true;
+    try {
+      if (!config) config = await (await fetch('/config')).json();
+      const base = config.supabase_url + '/auth/v1';
+      const headers = { 'Content-Type': 'application/json', 'apikey': config.supabase_anon_key };
+      if (mode === 'signup') {
+        const body = { email: authEmail.value, password: authPass.value, data: { full_name: authName.value || undefined } };
+        const r = await fetch(base + '/signup', { method: 'POST', headers, body: JSON.stringify(body) });
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.msg || data.error_description || 'Could not create account.');
+        if (data.access_token) {
+          session = { access_token: data.access_token, user: data.user };
+        } else {
+          authErr.textContent = 'Account created. Check your email to confirm, then log in.';
+          setMode('login');
+          authSubmit.disabled = false;
           return;
         }
-
-        const data = await res.json();
-        pendingDiv.classList.remove('pending');
-        pendingDiv.innerHTML = data.response || data.reply || data.message || JSON.stringify(data);
-      } catch (err) {
-        pendingDiv.innerText = 'Network error.';
-        pendingDiv.classList.remove('pending');
+      } else {
+        const r = await fetch(base + '/token?grant_type=password', {
+          method: 'POST', headers, body: JSON.stringify({ email: authEmail.value, password: authPass.value })
+        });
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.error_description || data.msg || 'Wrong email or password.');
+        session = { access_token: data.access_token, user: data.user };
       }
+      try { sessionStorage.setItem('aura_session', JSON.stringify(session)); } catch (e) {}
+      showApp();
+    } catch (err) {
+      authErr.textContent = err.message;
+    } finally {
+      authSubmit.disabled = false;
     }
+  });
 
-    function appendMsg(text, type) {
-      const log = document.getElementById('log');
-      const div = document.createElement('div');
-      div.className = `msg ${type}`;
-      div.innerText = text;
-      log.appendChild(div);
-      log.scrollTop = log.scrollHeight;
-      return div;
+  logoutBtn.addEventListener('click', () => { showAuth(); setMode('login'); });
+
+  (async () => {
+    if (session) {
+      const r = await api('/me');
+      if (r.ok) { showApp(); } else { showAuth(); }
+    } else {
+      showAuth();
     }
-  </script>
+  })();
+
+  function add(text, cls) {
+    const el = document.createElement('div');
+    el.className = 'msg ' + cls;
+    el.textContent = text;
+    log.appendChild(el);
+    log.scrollTop = log.scrollHeight;
+    return el;
+  }
+
+  function addImages(images) {
+    if (!images || !images.length) return;
+    const grid = document.createElement('div');
+    grid.className = 'imgs';
+    images.forEach(im => {
+      const img = document.createElement('img');
+      img.src = im.image_url;
+      img.alt = im.title || '';
+      img.loading = 'lazy';
+      img.onerror = () => img.remove();
+      grid.appendChild(img);
+    });
+    log.appendChild(grid);
+    log.scrollTop = log.scrollHeight;
+  }
+
+  function addConfirm(action) {
+    const box = document.createElement('div');
+    box.className = 'confirm';
+    const p = document.createElement('p');
+    p.textContent = 'Please confirm: ' + action.summary;
+    const row = document.createElement('div');
+    row.className = 'row';
+    const yes = document.createElement('button'); yes.className = 'danger'; yes.textContent = 'Confirm delete';
+    const no = document.createElement('button'); no.textContent = 'Cancel';
+    const finish = (msg) => { box.className = 'confirm done'; box.textContent = msg; };
+    yes.onclick = async () => {
+      const r = await api('/confirm/' + action.id, { method: 'POST' });
+      finish(r.ok ? 'Deleted: ' + action.summary : 'That request expired. Ask Aura again.');
+    };
+    no.onclick = async () => { await api('/reject/' + action.id, { method: 'POST' }); finish('Cancelled. Nothing was deleted.'); };
+    row.append(yes, no);
+    box.append(p, row);
+    log.appendChild(box);
+    log.scrollTop = log.scrollHeight;
+  }
+
+  async function sendMessage(text) {
+    text = text.trim();
+    if (!text && !pendingFile) return;
+    const empty = document.getElementById('empty');
+    if (empty) empty.remove();
+    if (pendingFile) add((text || '(photo)') + '  📎 ' + pendingFile.name, 'user');
+    else add(text, 'user');
+    const fileToSend = pendingFile;
+    input.value = ''; input.style.height = 'auto';
+    fileInput.value = ''; pendingFile = null; filePreview.classList.remove('show');
+    send.disabled = true;
+    const wait = add('Thinking…', 'aura pending');
+    try {
+      const body = { message: text, history };
+      if (fileToSend) { body.image_base64 = fileToSend.base64; body.image_mime = fileToSend.mime; }
+      const r = await api('/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      if (!r.ok) throw new Error('Server error ' + r.status + '. Check the terminal for details.');
+      const data = await r.json();
+      wait.className = 'msg aura';
+      wait.textContent = data.reply;
+      if (!fileToSend) history.push({ role: 'user', content: text }, { role: 'assistant', content: data.reply });
+      data.pending_actions.forEach(addConfirm);
+      addImages(data.images);
+    } catch (e) {
+      wait.className = 'msg aura';
+      wait.textContent = 'Could not reach Aura. ' + e.message;
+    } finally {
+      send.disabled = false; input.focus();
+    }
+  }
+
+  form.addEventListener('submit', e => { e.preventDefault(); sendMessage(input.value); });
+  input.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(input.value); } });
+  input.addEventListener('input', () => { input.style.height = 'auto'; input.style.height = input.scrollHeight + 'px'; });
+  document.querySelectorAll('.chip').forEach(c => c.addEventListener('click', () => sendMessage(c.textContent)));
+</script>
 </body>
 </html>
