@@ -343,7 +343,7 @@
     </div>
   </div>
 
-  <script>
+ <script>
     let isSignUp = false;
     let token = localStorage.getItem('aura_token');
     let currentUser = localStorage.getItem('aura_user');
@@ -365,17 +365,28 @@
       const email = document.getElementById('emailInput').value;
       const password = document.getElementById('passInput').value;
 
-      const endpoint = isSignUp ? '/signup' : '/token';
+      const primaryEndpoint = isSignUp ? '/register' : '/login';
+      const secondaryEndpoint = isSignUp ? '/signup' : '/token';
+
       const formData = new URLSearchParams();
       formData.append('username', email);
       formData.append('password', password);
 
       try {
-        const res = await fetch(endpoint, {
+        let res = await fetch(primaryEndpoint, {
           method: 'POST',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
           body: formData
         });
+
+        // જો /login પર 404 મળે તો ઓટોમેટિક /token ટ્રાય કરશે
+        if (res.status === 404) {
+          res = await fetch(secondaryEndpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: formData
+          });
+        }
 
         if (!res.ok) {
           const err = await res.json();
@@ -384,13 +395,13 @@
         }
 
         const data = await res.json();
-        token = data.access_token;
+        token = data.access_token || data.token;
         currentUser = email;
         localStorage.setItem('aura_token', token);
         localStorage.setItem('aura_user', currentUser);
         showChat(currentUser);
       } catch (err) {
-        alert('Server error. Please try again.');
+        alert('Server connection error. Please try again.');
       }
     }
 
