@@ -1,41 +1,37 @@
 """
-Aura backend (FastAPI) using the Groq API.
+Aura backend (FastAPI) using the Groq API, with real multi-user login via
+Supabase Auth (email + password).
 
 Run:  uvicorn main:app --reload
 Open: http://localhost:8000
-
-DEV MODE: no login screen yet. The app acts as the single user whose UUID is
-in DEV_USER_ID (.env). Before real users, add auth (e.g. Supabase Auth) and
-take user_id from the verified token instead.
 """
 
-import asyncio
 import json
 import os
-import secrets
-import time
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+import asyncio
 import asyncpg
-from fastapi import Depends, FastAPI, HTTPException, Request
+import httpx
+from dotenv import load_dotenv
+load_dotenv()  # must run before `import telegram`, which reads env vars at import time
+
+from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.responses import FileResponse
 from openai import AsyncOpenAI          # Groq is OpenAI-compatible
 from pydantic import BaseModel
-
-from dotenv import load_dotenv
-load_dotenv()  # must run before `import telegram`, which reads env vars at import time
 
 from tools import TOOLS, run_tool, execute_confirmed
 import telegram
 
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 DATABASE_URL = os.getenv("DATABASE_URL")
-DEV_USER_ID = os.getenv("DEV_USER_ID")
-MODEL = os.getenv("MODEL", "llama-3.3-70b-versatile")
-APP_PASSCODE = os.getenv("APP_PASSCODE")   # simple access code; set it before sharing a public link
+MODEL = os.getenv("MODEL", "openai/gpt-oss-120b")
+SUPABASE_URL = os.getenv("SUPABASE_URL")           # e.g. https://xxxx.supabase.co
+SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY")
 TELEGRAM_POLL_SECONDS = 30
 
 BASE = Path(__file__).parent
@@ -44,7 +40,6 @@ PROMPT_TEMPLATE = (BASE / "system_prompt.md").read_text(encoding="utf-8").split(
 client = AsyncOpenAI(api_key=GROQ_API_KEY, base_url="https://api.groq.com/openai/v1")
 pool: asyncpg.Pool | None = None
 
-# tools.py stores tool definitions in Anthropic format; convert to OpenAI/Groq format
 GROQ_TOOLS = [
     {"type": "function",
      "function": {"name": t["name"], "description": t["description"], "parameters": t["input_schema"]}}
@@ -52,33 +47,9 @@ GROQ_TOOLS = [
 ]
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    global pool
-    missing = [k for k, v in {"GROQ_API_KEY": GROQ_API_KEY,
-                              "DATABASE_URL": DATABASE_URL,
-                              "DEV_USER_ID": DEV_USER_ID}.items() if not v]
-    if missing:
-        raise RuntimeError(f"Missing in .env: {', '.join(missing)}")
-    if not APP_PASSCODE:
-        print("WARNING: APP_PASSCODE is not set. Do NOT expose this app to the internet without it.")
-    pool = await asyncpg.create_pool(DATABASE_URL, min_size=1, max_size=5, statement_cache_size=0)
-    await pool.execute(
-        "insert into profiles (id, display_name) values ($1, 'Friend') on conflict (id) do nothing",
-        DEV_USER_ID,
-    )
-    task = asyncio.create_task(reminder_loop())
-    yield
-    task.cancel()
-    await pool.close()
-
-
-
-
 async def reminder_loop():
-    """Runs forever in the background: every TELEGRAM_POLL_SECONDS, sends
-    any reminder whose time has arrived, then marks it sent (or reschedules
-    recurring ones would need extra logic -- kept simple here for now)."""
+    """Runs forever in the background: every TELEGRAM_POLL_SECONDS, sends any
+    reminder whose time has arrived to that user's linked Telegram chat."""
     while True:
         try:
             due = await pool.fetch(
@@ -102,7 +73,57 @@ async def reminder_loop():
         await asyncio.sleep(TELEGRAM_POLL_SECONDS)
 
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    global pool
+    missing = [k for k, v in {"GROQ_API_KEY": GROQ_API_KEY, "DATABASE_URL": DATABASE_URL,
+                              "SUPABASE_URL": SUPABASE_URL, "SUPABASE_ANON_KEY": SUPABASE_ANON_KEY
+                              }.items() if not v]
+    if missing:
+        raise RuntimeError(f"Missing in .env: {', '.join(missing)}")
+    pool = await asyncpg.create_pool(DATABASE_URL, min_size=1, max_size=5, statement_cache_size=0)
+    task = asyncio.create_task(reminder_loop())
+    yield
+    task.cancel()
+
+
 app = FastAPI(lifespan=lifespan)
+
+
+# ---------------------------------------------------------------
+# Auth: verify the Supabase access token sent by the frontend, upsert a
+# profile row for that user, and return their user_id. This is what makes
+# every user's notes, reminders, and name their own instead of one shared
+# "DEV_USER_ID".
+# ---------------------------------------------------------------
+async def require_user(authorization: str | None = Header(default=None)) -> str:
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(401, "Not logged in.")
+    token = authorization.removeprefix("Bearer ").strip()
+    try:
+        async with httpx.AsyncClient(timeout=10) as http_client:
+            r = await http_client.get(
+                f"{SUPABASE_URL}/auth/v1/user",
+                headers={"Authorization": f"Bearer {token}", "apikey": SUPABASE_ANON_KEY},
+            )
+    except Exception as e:
+        print(f"[auth] Supabase reach error: {e!r}")
+        raise HTTPException(503, "Could not verify login right now. Try again.")
+    if r.status_code != 200:
+        raise HTTPException(401, "Your session expired. Please log in again.")
+    user = r.json()
+    user_id = user["id"]
+    display_name = (
+        (user.get("user_metadata") or {}).get("full_name")
+        or (user.get("email") or "").split("@")[0]
+        or "Friend"
+    )
+    await pool.execute(
+        "insert into profiles (id, display_name) values ($1, $2) "
+        "on conflict (id) do update set display_name = coalesce(profiles.display_name, excluded.display_name)",
+        user_id, display_name,
+    )
+    return user_id
 
 
 async def build_system_prompt(user_id: str) -> tuple[str, bool]:
@@ -122,31 +143,9 @@ async def build_system_prompt(user_id: str) -> tuple[str, bool]:
     return prompt, prof["memory_enabled"]
 
 
-
-# ---------------------------------------------------------------
-# Simple passcode gate (stop-gap until real user login is added)
-# ---------------------------------------------------------------
-_failed: dict[str, list[float]] = {}
-
-
-async def require_passcode(request: Request):
-    if not APP_PASSCODE:
-        return
-    who = request.headers.get("cf-connecting-ip") or (request.client.host if request.client else "?")
-    now = time.time()
-    recent = [t for t in _failed.get(who, []) if now - t < 60]
-    if len(recent) >= 5:
-        raise HTTPException(429, "Too many wrong attempts. Wait a minute.")
-    given = request.headers.get("x-passcode", "")
-    if not secrets.compare_digest(given.encode(), APP_PASSCODE.encode()):
-        recent.append(now)
-        _failed[who] = recent
-        raise HTTPException(401, "Wrong passcode.")
-
-
 class ChatIn(BaseModel):
     message: str
-    history: list[dict] = []   # [{"role": "user"|"assistant", "content": "text"}]
+    history: list[dict] = []
 
 
 @app.get("/")
@@ -156,17 +155,17 @@ async def home():
 
 @app.get("/config")
 async def config():
-    return {"passcode_required": bool(APP_PASSCODE)}
+    return {"supabase_url": SUPABASE_URL, "supabase_anon_key": SUPABASE_ANON_KEY}
 
 
-@app.post("/login", dependencies=[Depends(require_passcode)])
-async def login():
-    return {"ok": True}
+@app.get("/me", dependencies=[])
+async def me(user_id: str = Depends(require_user)):
+    prof = await pool.fetchrow("select display_name, telegram_chat_id from profiles where id = $1", user_id)
+    return {"display_name": prof["display_name"], "telegram_linked": bool(prof["telegram_chat_id"])}
 
 
-@app.post("/chat", dependencies=[Depends(require_passcode)])
-async def chat(body: ChatIn):
-    user_id = DEV_USER_ID
+@app.post("/chat")
+async def chat(body: ChatIn, user_id: str = Depends(require_user)):
     system, memory_enabled = await build_system_prompt(user_id)
     tools = [t for t in GROQ_TOOLS if memory_enabled or t["function"]["name"] != "save_memory"]
 
@@ -179,15 +178,11 @@ async def chat(body: ChatIn):
     reply_text = ""
 
     try:
-        for i in range(6):  # tool-use loop, capped
+        for i in range(6):
             try:
                 resp = await client.chat.completions.create(
                     model=MODEL, messages=messages, tools=tools, max_tokens=1024)
             except Exception as e:
-                # Some models occasionally hallucinate a tool name that
-                # wasn't offered (e.g. calling "search" when only
-                # "web_search"/"image_search" exist). Retry once without
-                # tools rather than failing the whole request.
                 if "tool call validation failed" in str(e).lower() and tools:
                     print(f"[groq tool-name error, retrying without tools] {e!r}")
                     resp = await client.chat.completions.create(
@@ -217,50 +212,46 @@ async def chat(body: ChatIn):
                     out = await run_tool(pool, user_id, tc.function.name, args)
                 if out.get("pending_action_id"):
                     pending.append({"id": out["pending_action_id"], "summary": out["summary"]})
-                if tc.function.name == "image_search" and out.get("ok"):
+                if tc.function.name in ("image_search", "generate_image") and out.get("ok"):
                     images.extend(out.get("images", []))
                 messages.append({"role": "tool", "tool_call_id": tc.id, "content": json.dumps(out)})
     except Exception as e:
         print(f"[groq error] {e!r}")
         return {"reply": "Sorry, I couldn't reach the AI service. Check your GROQ_API_KEY and "
-                         "the terminal for details, then try again.", "pending_actions": []}
+                         "the terminal for details, then try again.", "pending_actions": [], "images": []}
 
     return {"reply": reply_text or "Done.", "pending_actions": pending, "images": images}
 
 
-
-
-@app.api_route("/telegram/link", methods=["GET", "POST"], dependencies=[Depends(require_passcode)])
-async def telegram_link():
-    """Call this once, right after you have messaged your bot on Telegram,
-    to save your chat_id against the dev user's profile."""
+@app.api_route("/telegram/link", methods=["GET", "POST"])
+async def telegram_link(user_id: str = Depends(require_user)):
     chat_id = await telegram.get_latest_chat_id()
     if not chat_id:
         raise HTTPException(400, "No recent message found. Send your bot any message on "
                                  "Telegram first, then try this again.")
     await pool.execute(
         "update profiles set telegram_chat_id = $1, updated_at = now() where id = $2",
-        chat_id, DEV_USER_ID)
+        chat_id, user_id)
     return {"ok": True, "chat_id": chat_id}
 
 
-@app.get("/telegram/status", dependencies=[Depends(require_passcode)])
-async def telegram_status():
-    prof = await pool.fetchrow("select telegram_chat_id from profiles where id = $1", DEV_USER_ID)
+@app.get("/telegram/status")
+async def telegram_status(user_id: str = Depends(require_user)):
+    prof = await pool.fetchrow("select telegram_chat_id from profiles where id = $1", user_id)
     return {"linked": bool(prof["telegram_chat_id"])}
 
 
-@app.post("/confirm/{action_id}", dependencies=[Depends(require_passcode)])
-async def confirm(action_id: str):
-    result = await execute_confirmed(pool, DEV_USER_ID, action_id)
+@app.post("/confirm/{action_id}")
+async def confirm(action_id: str, user_id: str = Depends(require_user)):
+    result = await execute_confirmed(pool, user_id, action_id)
     if not result.get("ok"):
         raise HTTPException(400, result.get("error", "Could not confirm."))
     return result
 
 
-@app.post("/reject/{action_id}", dependencies=[Depends(require_passcode)])
-async def reject(action_id: str):
+@app.post("/reject/{action_id}")
+async def reject(action_id: str, user_id: str = Depends(require_user)):
     await pool.execute(
         "update pending_actions set status = 'rejected' "
-        "where id = $1 and user_id = $2 and status = 'pending'", action_id, DEV_USER_ID)
+        "where id = $1 and user_id = $2 and status = 'pending'", action_id, user_id)
     return {"ok": True}
