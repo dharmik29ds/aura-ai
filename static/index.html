@@ -8,14 +8,9 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;700&display=swap">
 <style>
   :root {
-    --ink: #16213E;
-    --paper: #F1F4F8;
-    --card: #FFFFFF;
-    --teal: #0E7C86;
-    --teal-dark: #0A5F67;
-    --muted: #5B6577;
-    --line: #D9DFE8;
-    --danger: #B3261E;
+    --ink: #16213E; --paper: #F1F4F8; --card: #FFFFFF;
+    --teal: #0E7C86; --teal-dark: #0A5F67; --muted: #5B6577;
+    --line: #D9DFE8; --danger: #B3261E;
     --font: "Plus Jakarta Sans", system-ui, -apple-system, "Segoe UI", "Noto Sans Devanagari", sans-serif;
   }
   * { box-sizing: border-box; }
@@ -23,15 +18,21 @@
   body { background: var(--paper); color: var(--ink); font-family: var(--font); font-size: 16px; line-height: 1.55; }
   .app { max-width: 760px; height: 100%; margin: 0 auto; display: flex; flex-direction: column; }
 
-  header { padding: 18px 20px 14px; border-bottom: 1px solid var(--line); display: flex; align-items: baseline; gap: 12px; }
+  header { padding: 18px 20px 14px; border-bottom: 1px solid var(--line); display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
   header h1 { margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -0.01em; }
-  header span { color: var(--muted); font-size: 14px; }
+  header .sub { color: var(--muted); font-size: 14px; }
+  header .who { display: flex; align-items: center; gap: 10px; }
+  header .who span { font-size: 14px; color: var(--muted); }
+  header button.link { background: none; border: none; color: var(--teal); font-size: 14px; cursor: pointer; padding: 0; }
 
   #log { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 14px; }
   .msg { max-width: 82%; padding: 11px 15px; border-radius: 16px; white-space: pre-wrap; overflow-wrap: anywhere; }
   .msg.user { align-self: flex-end; background: var(--ink); color: #fff; border-bottom-right-radius: 4px; }
   .msg.aura { align-self: flex-start; background: var(--card); border: 1px solid var(--line); border-bottom-left-radius: 4px; }
   .msg.pending { color: var(--muted); }
+
+  .imgs { align-self: flex-start; max-width: 82%; display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .imgs img { width: 100%; height: 110px; object-fit: cover; border-radius: 12px; border: 1px solid var(--line); background: var(--card); }
 
   .confirm { align-self: flex-start; max-width: 82%; background: var(--card); border: 1px solid var(--danger); border-radius: 12px; padding: 14px 16px; }
   .confirm p { margin: 0 0 12px; }
@@ -40,7 +41,7 @@
 
   button { font-family: inherit; font-size: 15px; border-radius: 10px; cursor: pointer; padding: 9px 16px; border: 1px solid var(--line); background: var(--card); color: var(--ink); }
   button.danger { background: var(--danger); border-color: var(--danger); color: #fff; }
-  button:focus-visible, textarea:focus-visible { outline: 3px solid var(--teal); outline-offset: 2px; }
+  button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px solid var(--teal); outline-offset: 2px; }
 
   .empty { margin: auto 0; }
   .empty h2 { font-size: 26px; margin: 0 0 6px; letter-spacing: -0.01em; }
@@ -49,27 +50,51 @@
   .chip { text-align: left; }
   .chip:hover { border-color: var(--teal); }
 
-  form { display: flex; gap: 10px; padding: 14px 20px 20px; border-top: 1px solid var(--line); }
+  form#form { display: flex; gap: 10px; padding: 14px 20px 20px; border-top: 1px solid var(--line); }
   textarea { flex: 1; resize: none; font-family: inherit; font-size: 16px; padding: 11px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); color: var(--ink); max-height: 140px; }
   #send { background: var(--teal); border-color: var(--teal); color: #fff; font-weight: 500; padding: 0 22px; }
   #send:hover { background: var(--teal-dark); }
   #send:disabled { opacity: .55; cursor: default; }
 
-  #lock { position: fixed; inset: 0; background: var(--paper); display: flex; align-items: center; justify-content: center; padding: 20px; z-index: 10; }
-  #lock[hidden] { display: none; }
-  #lockForm { width: 100%; max-width: 340px; }
-  #lockForm h2 { margin: 0 0 6px; font-size: 24px; letter-spacing: -0.01em; }
-  #lockForm p { margin: 0 0 16px; color: var(--muted); }
-  #lockForm input { width: 100%; font-family: inherit; font-size: 16px; padding: 11px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); color: var(--ink); margin-bottom: 12px; }
-  #lockForm button { width: 100%; background: var(--teal); border-color: var(--teal); color: #fff; font-weight: 500; }
-  #lockErr { margin: 12px 0 0; color: var(--danger); min-height: 1.5em; }
+  /* auth screen */
+  #auth { position: fixed; inset: 0; background: var(--paper); display: flex; align-items: center; justify-content: center; padding: 20px; z-index: 10; }
+  #auth[hidden] { display: none; }
+  .authbox { width: 100%; max-width: 360px; }
+  .authbox h2 { font-size: 26px; margin: 0 0 6px; letter-spacing: -0.01em; }
+  .authbox p.sub { margin: 0 0 20px; color: var(--muted); }
+  .authbox input { width: 100%; font-family: inherit; font-size: 16px; padding: 11px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); color: var(--ink); margin-bottom: 10px; }
+  .authbox button[type="submit"] { width: 100%; background: var(--teal); border-color: var(--teal); color: #fff; font-weight: 500; padding: 11px; margin-top: 4px; }
+  .authbox .switch { margin-top: 16px; font-size: 14px; color: var(--muted); text-align: center; }
+  .authbox .switch button { background: none; border: none; color: var(--teal); cursor: pointer; padding: 0; font: inherit; }
+  .autherr { margin: 10px 0 0; color: var(--danger); font-size: 14px; min-height: 1.4em; }
 
   @media (prefers-reduced-motion: no-preference) { .msg { animation: in .18s ease-out; } @keyframes in { from { opacity: 0; transform: translateY(4px); } } }
 </style>
 </head>
 <body>
+
+<div id="auth">
+  <div class="authbox">
+    <h2 id="authTitle">Welcome to Aura</h2>
+    <p class="sub" id="authSub">Log in to your account.</p>
+    <form id="authForm">
+      <input id="authName" type="text" placeholder="Your name" autocomplete="name" hidden>
+      <input id="authEmail" type="email" placeholder="Email" autocomplete="email" required>
+      <input id="authPass" type="password" placeholder="Password" autocomplete="current-password" required>
+      <button type="submit" id="authSubmit">Log in</button>
+      <p class="autherr" id="authErr" role="alert"></p>
+    </form>
+    <div class="switch">
+      <span id="switchText">New here?</span> <button type="button" id="switchBtn">Create an account</button>
+    </div>
+  </div>
+</div>
+
 <div class="app">
-  <header><h1>Aura</h1><span>Notes, reminders, and answers in English, Hindi, or Hinglish</span></header>
+  <header>
+    <div><h1>Aura</h1><div class="sub">Notes, reminders, and answers in English, Hindi, or Hinglish</div></div>
+    <div class="who"><span id="whoami"></span><button class="link" id="logoutBtn" hidden>Log out</button></div>
+  </header>
 
   <div id="log" aria-live="polite">
     <div class="empty" id="empty">
@@ -90,55 +115,122 @@
   </form>
 </div>
 
-<div id="lock" hidden>
-  <form id="lockForm">
-    <h2>Enter passcode</h2>
-    <p>This Aura is private.</p>
-    <input id="pass" type="password" autocomplete="current-password" aria-label="Passcode">
-    <button type="submit">Unlock</button>
-    <p id="lockErr" role="alert"></p>
-  </form>
-</div>
-
 <script>
   const log = document.getElementById('log');
   const form = document.getElementById('form');
   const input = document.getElementById('input');
   const send = document.getElementById('send');
   let history = [];
-  const lock = document.getElementById('lock');
-  const lockForm = document.getElementById('lockForm');
-  const pass = document.getElementById('pass');
-  const lockErr = document.getElementById('lockErr');
-  let passcode = '';
-  try { passcode = sessionStorage.getItem('aura_pass') || ''; } catch (e) {}
+  let config = null;
+  let session = null; // { access_token, user: {id, email, user_metadata} }
 
-  function api(url, opts = {}) {
-    opts.headers = Object.assign({}, opts.headers, { 'X-Passcode': passcode });
-    return fetch(url, opts);
-  }
-  function showLock(msg) {
-    lock.hidden = false; lockErr.textContent = msg || ''; pass.value = ''; pass.focus();
-  }
-  lockForm.addEventListener('submit', async e => {
-    e.preventDefault();
-    passcode = pass.value;
-    const r = await api('/login', { method: 'POST' });
-    if (r.ok) {
-      try { sessionStorage.setItem('aura_pass', passcode); } catch (e) {}
-      lock.hidden = true; input.focus();
+  try { const saved = sessionStorage.getItem('aura_session'); if (saved) session = JSON.parse(saved); } catch (e) {}
+
+  const authEl = document.getElementById('auth');
+  const authForm = document.getElementById('authForm');
+  const authTitle = document.getElementById('authTitle');
+  const authSub = document.getElementById('authSub');
+  const authName = document.getElementById('authName');
+  const authEmail = document.getElementById('authEmail');
+  const authPass = document.getElementById('authPass');
+  const authSubmit = document.getElementById('authSubmit');
+  const authErr = document.getElementById('authErr');
+  const switchText = document.getElementById('switchText');
+  const switchBtn = document.getElementById('switchBtn');
+  const whoami = document.getElementById('whoami');
+  const logoutBtn = document.getElementById('logoutBtn');
+  let mode = 'login'; // or 'signup'
+
+  function setMode(m) {
+    mode = m;
+    if (m === 'signup') {
+      authTitle.textContent = 'Create your account';
+      authSub.textContent = 'Aura will remember your name and keep your notes private to you.';
+      authName.hidden = false;
+      authSubmit.textContent = 'Create account';
+      switchText.textContent = 'Already have an account?';
+      switchBtn.textContent = 'Log in';
     } else {
-      showLock(r.status === 429 ? 'Too many tries. Wait a minute.' : 'Wrong passcode.');
+      authTitle.textContent = 'Welcome to Aura';
+      authSub.textContent = 'Log in to your account.';
+      authName.hidden = true;
+      authSubmit.textContent = 'Log in';
+      switchText.textContent = 'New here?';
+      switchBtn.textContent = 'Create an account';
+    }
+    authErr.textContent = '';
+  }
+  switchBtn.addEventListener('click', () => setMode(mode === 'login' ? 'signup' : 'login'));
+
+  async function api(url, opts = {}) {
+    opts.headers = Object.assign({}, opts.headers, session ? { 'Authorization': 'Bearer ' + session.access_token } : {});
+    const r = await fetch(url, opts);
+    if (r.status === 401) { showAuth(); }
+    return r;
+  }
+
+  function showAuth() {
+    session = null;
+    try { sessionStorage.removeItem('aura_session'); } catch (e) {}
+    authEl.hidden = false;
+    logoutBtn.hidden = true;
+    whoami.textContent = '';
+  }
+
+  function showApp() {
+    authEl.hidden = true;
+    logoutBtn.hidden = false;
+    whoami.textContent = (session.user.user_metadata && session.user.user_metadata.full_name) || session.user.email || '';
+    input.focus();
+  }
+
+  authForm.addEventListener('submit', async e => {
+    e.preventDefault();
+    authErr.textContent = '';
+    authSubmit.disabled = true;
+    try {
+      if (!config) config = await (await fetch('/config')).json();
+      const base = config.supabase_url + '/auth/v1';
+      const headers = { 'Content-Type': 'application/json', 'apikey': config.supabase_anon_key };
+      if (mode === 'signup') {
+        const body = { email: authEmail.value, password: authPass.value, data: { full_name: authName.value || undefined } };
+        const r = await fetch(base + '/signup', { method: 'POST', headers, body: JSON.stringify(body) });
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.msg || data.error_description || 'Could not create account.');
+        if (data.access_token) {
+          session = { access_token: data.access_token, user: data.user };
+        } else {
+          authErr.textContent = 'Account created. Check your email to confirm, then log in.';
+          setMode('login');
+          authSubmit.disabled = false;
+          return;
+        }
+      } else {
+        const r = await fetch(base + '/token?grant_type=password', {
+          method: 'POST', headers, body: JSON.stringify({ email: authEmail.value, password: authPass.value })
+        });
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.error_description || data.msg || 'Wrong email or password.');
+        session = { access_token: data.access_token, user: data.user };
+      }
+      try { sessionStorage.setItem('aura_session', JSON.stringify(session)); } catch (e) {}
+      showApp();
+    } catch (err) {
+      authErr.textContent = err.message;
+    } finally {
+      authSubmit.disabled = false;
     }
   });
+
+  logoutBtn.addEventListener('click', () => { showAuth(); setMode('login'); });
+
   (async () => {
-    try {
-      const c = await (await fetch('/config')).json();
-      if (c.passcode_required) {
-        const r = await api('/login', { method: 'POST' });
-        if (!r.ok) showLock();
-      }
-    } catch (e) {}
+    if (session) {
+      const r = await api('/me');
+      if (r.ok) { showApp(); } else { showAuth(); }
+    } else {
+      showAuth();
+    }
   })();
 
   function add(text, cls) {
@@ -148,6 +240,22 @@
     log.appendChild(el);
     log.scrollTop = log.scrollHeight;
     return el;
+  }
+
+  function addImages(images) {
+    if (!images || !images.length) return;
+    const grid = document.createElement('div');
+    grid.className = 'imgs';
+    images.forEach(im => {
+      const img = document.createElement('img');
+      img.src = im.image_url;
+      img.alt = im.title || '';
+      img.loading = 'lazy';
+      img.onerror = () => img.remove();
+      grid.appendChild(img);
+    });
+    log.appendChild(grid);
+    log.scrollTop = log.scrollHeight;
   }
 
   function addConfirm(action) {
@@ -186,13 +294,13 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: text, history })
       });
-      if (r.status === 401) { showLock('Enter the passcode to continue.'); throw new Error('Passcode needed.'); }
       if (!r.ok) throw new Error('Server error ' + r.status + '. Check the terminal for details.');
       const data = await r.json();
       wait.className = 'msg aura';
       wait.textContent = data.reply;
       history.push({ role: 'user', content: text }, { role: 'assistant', content: data.reply });
       data.pending_actions.forEach(addConfirm);
+      addImages(data.images);
     } catch (e) {
       wait.className = 'msg aura';
       wait.textContent = 'Could not reach Aura. ' + e.message;
