@@ -72,80 +72,6 @@
       margin: 0;
     }
 
-    .user-info {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      font-size: 14px;
-      color: var(--muted);
-    }
-
-    .logout-btn {
-      background: none;
-      border: none;
-      color: var(--teal);
-      cursor: pointer;
-      font-weight: 600;
-      padding: 4px 8px;
-    }
-
-    /* Auth Screen */
-    .auth-box {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 40px 20px;
-      text-align: center;
-    }
-
-    .auth-box h2 {
-      font-size: 28px;
-      font-weight: 800;
-      margin-bottom: 8px;
-      background: linear-gradient(135deg, #10b981, #34d399, #3b82f6);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-    }
-
-    .auth-box p { color: var(--muted); margin-bottom: 24px; }
-
-    .auth-form {
-      width: 100%;
-      max-width: 340px;
-      display: flex;
-      flex-direction: column;
-      gap: 14px;
-    }
-
-    .auth-form input {
-      width: 100%;
-      padding: 12px 16px;
-      background: rgba(255, 255, 255, 0.05);
-      border: 1px solid var(--line);
-      border-radius: 12px;
-      color: #fff;
-      font-size: 15px;
-      outline: none;
-    }
-
-    .auth-form input:focus {
-      border-color: var(--teal);
-      box-shadow: 0 0 10px rgba(16, 185, 129, 0.3);
-    }
-
-    .auth-form button {
-      padding: 12px;
-      background: linear-gradient(135deg, #059669, #10b981);
-      color: white;
-      border: none;
-      border-radius: 12px;
-      font-weight: 700;
-      cursor: pointer;
-      box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3);
-    }
-
     /* Chat View */
     .chat-view {
       flex: 1;
@@ -278,8 +204,6 @@
       cursor: pointer;
       box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3);
     }
-
-    .hidden { display: none !important; }
   </style>
 </head>
 <body>
@@ -300,37 +224,16 @@
         </svg>
         <h1 class="brand-title">Aura</h1>
       </div>
-      <div id="userHeader" class="user-info hidden">
-        <span id="userEmail"></span>
-        <button class="logout-btn" onclick="logout()">Log out</button>
-      </div>
     </header>
 
-    <!-- AUTH SCREEN -->
-    <div id="authScreen" class="auth-box">
-      <h2>Welcome to Aura</h2>
-      <p id="authSub">Log in to your account.</p>
-      <form class="auth-form" onsubmit="handleAuth(event)">
-        <input type="email" id="emailInput" placeholder="Email" required>
-        <input type="password" id="passInput" placeholder="Password" required>
-        <button type="submit" id="authBtn">Log in</button>
-      </form>
-      <p style="margin-top: 16px; font-size: 14px;">
-        <span id="toggleText">New here?</span> 
-        <a href="#" style="color: var(--teal); font-weight: 600; text-decoration: none;" onclick="toggleAuth(event)">Create an account</a>
-      </p>
-    </div>
-
-    <!-- CHAT SCREEN -->
-    <div id="chatScreen" class="chat-view hidden">
+    <div class="chat-view">
       <div id="log">
         <div id="welcomePrompt" class="welcome-prompt">
           <h2>What can I do for you?</h2>
           <p>Try one of these, or type anything.</p>
           <div class="suggestions">
             <div class="chip" onclick="useSuggestion(this.innerText)">Kal subah 7 baje gym ka reminder set karo</div>
-            <div class="chip" onclick="useSuggestion(this.innerText)">Save a note: Ask Priya about the venue booking</div>
-            <div class="chip" onclick="useSuggestion(this.innerText)">Remember that I prefer replies in Hinglish</div>
+            <div class="chip" onclick="useSuggestion(this.innerText)">Generate image of a futuristic neon city</div>
             <div class="chip" onclick="useSuggestion(this.innerText)">Show my reminders</div>
           </div>
         </div>
@@ -343,81 +246,7 @@
     </div>
   </div>
 
- <script>
-    let isSignUp = false;
-    let token = localStorage.getItem('aura_token');
-    let currentUser = localStorage.getItem('aura_user');
-
-    if (token && currentUser) {
-      showChat(currentUser);
-    }
-
-    function toggleAuth(e) {
-      e.preventDefault();
-      isSignUp = !isSignUp;
-      document.getElementById('authSub').innerText = isSignUp ? 'Create your new account.' : 'Log in to your account.';
-      document.getElementById('authBtn').innerText = isSignUp ? 'Sign up' : 'Log in';
-      document.getElementById('toggleText').innerText = isSignUp ? 'Already have an account?' : 'New here?';
-    }
-
-    async function handleAuth(e) {
-      e.preventDefault();
-      const email = document.getElementById('emailInput').value;
-      const password = document.getElementById('passInput').value;
-
-      const primaryEndpoint = isSignUp ? '/register' : '/login';
-      const secondaryEndpoint = isSignUp ? '/signup' : '/token';
-
-      const formData = new URLSearchParams();
-      formData.append('username', email);
-      formData.append('password', password);
-
-      try {
-        let res = await fetch(primaryEndpoint, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: formData
-        });
-
-        // જો /login પર 404 મળે તો ઓટોમેટિક /token ટ્રાય કરશે
-        if (res.status === 404) {
-          res = await fetch(secondaryEndpoint, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: formData
-          });
-        }
-
-        if (!res.ok) {
-          const err = await res.json();
-          alert(err.detail || 'Authentication failed');
-          return;
-        }
-
-        const data = await res.json();
-        token = data.access_token || data.token;
-        currentUser = email;
-        localStorage.setItem('aura_token', token);
-        localStorage.setItem('aura_user', currentUser);
-        showChat(currentUser);
-      } catch (err) {
-        alert('Server connection error. Please try again.');
-      }
-    }
-
-    function showChat(email) {
-      document.getElementById('authScreen').classList.add('hidden');
-      document.getElementById('chatScreen').classList.remove('hidden');
-      document.getElementById('userHeader').classList.remove('hidden');
-      document.getElementById('userEmail').innerText = email;
-    }
-
-    function logout() {
-      localStorage.removeItem('aura_token');
-      localStorage.removeItem('aura_user');
-      location.reload();
-    }
-
+  <script>
     function useSuggestion(text) {
       document.getElementById('userInput').value = text;
       sendMessage(new Event('submit'));
@@ -445,10 +274,7 @@
       try {
         const res = await fetch('/chat', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ message: text })
         });
 
