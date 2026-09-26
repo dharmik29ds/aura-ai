@@ -8,7 +8,6 @@ Open: http://localhost:8000
 
 import json
 import os
-from openai import AsyncOpenAI
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
@@ -29,14 +28,12 @@ from tools import TOOLS, run_tool, execute_confirmed
 import telegram
 
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 DATABASE_URL = os.getenv("DATABASE_URL")
 MODEL = os.getenv("MODEL", "openai/gpt-oss-120b")
 MODEL_VISION = os.getenv("MODEL_VISION", "meta-llama/llama-4-scout-17b-16e-instruct")
 SUPABASE_URL = os.getenv("SUPABASE_URL")           # e.g. https://xxxx.supabase.co
 SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY")
 TELEGRAM_POLL_SECONDS = 30
-image_client = AsyncOpenAI(api_key=OPENAI_API_KEY)
 
 BASE = Path(__file__).parent
 PROMPT_TEMPLATE = (BASE / "system_prompt.md").read_text(encoding="utf-8").split("\n---\n")[1].strip()
@@ -60,37 +57,21 @@ async def reminder_loop():
                 "select id, user_id, title from reminders "
                 "where status = 'pending' and deleted_at is null and remind_at <= now()"
             )
-
             for r in due:
                 prof = await pool.fetchrow(
-                    "select telegram_chat_id from profiles where id = $1",
-                    r["user_id"]
-                )
-
+                    "select telegram_chat_id from profiles where id = $1", r["user_id"])
                 sent = False
-
                 if prof and prof["telegram_chat_id"]:
                     sent = await telegram.send_message(
-                        prof["telegram_chat_id"],
-                        f"\U0001F514 Reminder: {r['title']}"
-                    )
-
+                        prof["telegram_chat_id"], f"\U0001F514 Reminder: {r['title']}")
                 await pool.execute(
                     "update reminders set status = 'sent', updated_at = now() where id = $1",
-                    r["id"]
-                )
-
+                    r["id"])
                 if not sent:
-                    print(
-                        f"[reminder] {r['id']} due but not sent "
-                        "(no linked Telegram chat)"
-                    )
-
+                    print(f"[reminder] {r['id']} due but not sent (no linked Telegram chat)")
         except Exception as e:
-            print(f"[reminder error] {e!r}")
-
+            print(f"[reminder_loop error] {e!r}")
         await asyncio.sleep(TELEGRAM_POLL_SECONDS)
-    
 
 
 @asynccontextmanager
@@ -162,70 +143,7 @@ async def build_system_prompt(user_id: str) -> tuple[str, bool]:
               .replace("{{now_local}}", now_local)
               .replace("{{retrieved_memories}}", memories))
     return prompt, prof["memory_enabled"]
-async def do_edit_photo(
-    instruction: str,
-    image_base64: str,
-    image_mime: str = "image/jpeg"
-) -> dict:
-    """Edit an uploaded image using OpenAI."""
 
-    if not image_base64:
-        return {
-            "ok": False,
-            "error": "No photo was uploaded."
-        }
-
-    if not OPENAI_API_KEY:
-        return {
-            "ok": False,
-            "error": "OPENAI_API_KEY is not configured."
-        }
-
-    try:
-        import base64
-        from io import BytesIO
-
-        image_bytes = base64.b64decode(image_base64)
-        image_file = BytesIO(image_bytes)
-
-        if "png" in image_mime:
-            image_file.name = "upload.png"
-        elif "webp" in image_mime:
-            image_file.name = "upload.webp"
-        else:
-            image_file.name = "upload.jpg"
-
-        result = await image_client.images.edit(
-            model="gpt-image-1",
-            image=image_file,
-            prompt=instruction
-        )
-
-        if not result.data or not result.data[0].b64_json:
-            return {
-                "ok": False,
-                "error": "No edited image was returned."
-            }
-
-        edited_base64 = result.data[0].b64_json
-
-        return {
-            "ok": True,
-            "images": [
-                {
-                    "title": instruction,
-                    "image_url": f"data:image/png;base64,{edited_base64}",
-                    "source": "OpenAI"
-                }
-            ]
-        }
-
-    except Exception as e:
-        print(f"[edit_photo error] {e!r}")
-        return {
-            "ok": False,
-            "error": f"Image editing failed: {str(e)}"
-        }
 
 class ChatIn(BaseModel):
     message: str
@@ -247,17 +165,13 @@ async def config():
 @app.get("/me", dependencies=[])
 async def me(user_id: str = Depends(require_user)):
     prof = await pool.fetchrow("select display_name, telegram_chat_id from profiles where id = $1", user_id)
-  
     return {"display_name": prof["display_name"], "telegram_linked": bool(prof["telegram_chat_id"])}
 
 
 @app.post("/chat")
 async def chat(body: ChatIn, user_id: str = Depends(require_user)):
     system, memory_enabled = await build_system_prompt(user_id)
-    tools = [
-    t for t in (GROQ_TOOLS or [])
-    if memory_enabled or t["function"]["name"] != "save_memory"
-]
+    tools = [t for t in GROQ_TOOLS if memory_enabled or t["function"]["name"] != "save_memory"]
 
     messages = [{"role": "system", "content": system}]
     messages += [m for m in body.history if m.get("role") in ("user", "assistant")]
@@ -279,6 +193,32 @@ async def chat(body: ChatIn, user_id: str = Depends(require_user)):
                 "url": f"data:{body.image_mime or 'image/jpeg'};base64,{body.image_base64}"}},
         ]}
 
+    async def do_edit_photo(instruction: str) -> dict:
+        """Describe the uploaded photo, then generate a new AI image that
+        applies the requested change. Not a pixel-level edit of the
+        original -- a fresh recreation, which the tool description makes
+        clear to the model so it can set the user's expectations."""
+        if not has_image:
+            return {"ok": False, "error": "No photo was uploaded this turn."}
+        try:
+            vresp = await client.chat.completions.create(
+                model=MODEL_VISION, max_tokens=300,
+                messages=[{"role": "user", "content": [
+                    {"type": "text", "text": "Describe this photo in one or two concrete, visual sentences."},
+                    {"type": "image_url", "image_url": {
+                        "url": f"data:{body.image_mime or 'image/jpeg'};base64,{body.image_base64}"}},
+                ]}],
+            )
+            description = vresp.choices[0].message.content or ""
+        except Exception as e:
+            print(f"[edit_photo describe error] {e!r}")
+            return {"ok": False, "error": "Couldn't read the uploaded photo."}
+        import urllib.parse
+        prompt = f"{description}. {instruction}"
+        encoded = urllib.parse.quote(prompt)
+        url = f"https://image.pollinations.ai/prompt/{encoded}?width=1024&height=1024&nologo=true"
+        return {"ok": True, "images": [{"title": instruction, "image_url": url, "source": "AI-recreated"}]}
+
     try:
         for i in range(6):
             try:
@@ -291,60 +231,35 @@ async def chat(body: ChatIn, user_id: str = Depends(require_user)):
                         model=active_model, messages=messages, tools=None, max_tokens=1024)
                 else:
                     raise
-                                msg = resp.choices[0].message
-                                tool_calls = msg.tool_calls or []
+            msg = resp.choices[0].message
 
-                                if not tool_calls:
-                                  reply_text = msg.content or ""
-                                   break
+            if not msg.tool_calls:
+                reply_text = msg.content or ""
+                break
+
             messages.append({
                 "role": "assistant",
                 "content": msg.content or "",
-                "tool_calls": [{
-                    "id": tc.id,
-                    "type": "function",
-                                "function": {
-                                    "name": tc.function.name,
-                                    "arguments": tc.function.arguments
-                                }
-                }
-                               for tc in tool_calls:
-                              ]
+                "tool_calls": [{"id": tc.id, "type": "function",
+                                "function": {"name": tc.function.name,
+                                             "arguments": tc.function.arguments}}
+                               for tc in msg.tool_calls],
             })
-        for tc in tool_calls:
-            try:
-                args = json.loads(tc.function.arguments or "{}")
-            except json.JSONDecodeError:
-                out = {"ok": False, "error": "Invalid tool arguments."}
-            else:
-                if tc.function.name == "edit_photo":
-                    out = await do_edit_photo(
-                        args.get("instruction", ""),
-                        body.image_base64,
-                        body.image_mime or "image/jpeg"
-                    )
+            for tc in msg.tool_calls:
+                try:
+                    args = json.loads(tc.function.arguments or "{}")
+                except json.JSONDecodeError:
+                    out = {"ok": False, "error": "Invalid tool arguments."}
                 else:
-                    out = await run_tool(
-                        pool,
-                        user_id,
-                        tc.function.name,
-                        args
-                    )
-
-            if out.get("pending_action_id"):
-                pending.append({
-                    "id": out["pending_action_id"],
-                    "summary": out["summary"]
-                })
-
-            if tc.function.name in ("image_search", "generate_image", "edit_photo") and out.get("ok"):
-                images.extend(out.get("images", []))
-
-            messages.append({
-                "role": "tool",
-                "tool_call_id": tc.id,
-                "content": json.dumps(out)
-            })
+                    if tc.function.name == "edit_photo":
+                        out = await do_edit_photo(args.get("instruction", ""))
+                    else:
+                        out = await run_tool(pool, user_id, tc.function.name, args)
+                if out.get("pending_action_id"):
+                    pending.append({"id": out["pending_action_id"], "summary": out["summary"]})
+                if tc.function.name in ("image_search", "generate_image", "edit_photo") and out.get("ok"):
+                    images.extend(out.get("images", []))
+                messages.append({"role": "tool", "tool_call_id": tc.id, "content": json.dumps(out)})
     except Exception as e:
         print(f"[groq error] {e!r}")
         return {"reply": "Sorry, I couldn't reach the AI service. Check your GROQ_API_KEY and "
