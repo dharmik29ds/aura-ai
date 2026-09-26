@@ -291,12 +291,12 @@ async def chat(body: ChatIn, user_id: str = Depends(require_user)):
                         model=active_model, messages=messages, tools=None, max_tokens=1024)
                 else:
                     raise
-                          msg = resp.choices[0].message
-                          tool_calls = msg.tool_calls or []
+                                msg = resp.choices[0].message
+                                tool_calls = msg.tool_calls or []
 
-                          if not tool_calls:
-                               reply_text = msg.content or ""
-                               break
+                                if not tool_calls:
+                                  reply_text = msg.content or ""
+                                   break
             messages.append({
                 "role": "assistant",
                 "content": msg.content or "",
