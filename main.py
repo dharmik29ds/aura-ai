@@ -8,6 +8,7 @@ Open: http://localhost:8000
 
 import json
 import os
+from openai import AsyncOpenAI
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
@@ -28,12 +29,14 @@ from tools import TOOLS, run_tool, execute_confirmed
 import telegram
 
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 DATABASE_URL = os.getenv("DATABASE_URL")
 MODEL = os.getenv("MODEL", "openai/gpt-oss-120b")
 MODEL_VISION = os.getenv("MODEL_VISION", "meta-llama/llama-4-scout-17b-16e-instruct")
 SUPABASE_URL = os.getenv("SUPABASE_URL")           # e.g. https://xxxx.supabase.co
 SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY")
 TELEGRAM_POLL_SECONDS = 30
+image_client = AsyncOpenAI(api_key=OPENAI_API_KEY)
 
 BASE = Path(__file__).parent
 PROMPT_TEMPLATE = (BASE / "system_prompt.md").read_text(encoding="utf-8").split("\n---\n")[1].strip()
@@ -193,31 +196,23 @@ async def chat(body: ChatIn, user_id: str = Depends(require_user)):
                 "url": f"data:{body.image_mime or 'image/jpeg'};base64,{body.image_base64}"}},
         ]}
 
-    async def do_edit_photo(instruction: str) -> dict:
-        """Describe the uploaded photo, then generate a new AI image that
-        applies the requested change. Not a pixel-level edit of the
-        original -- a fresh recreation, which the tool description makes
-        clear to the model so it can set the user's expectations."""
-        if not has_image:
-            return {"ok": False, "error": "No photo was uploaded this turn."}
-        try:
-            vresp = await client.chat.completions.create(
-                model=MODEL_VISION, max_tokens=300,
-                messages=[{"role": "user", "content": [
-                    {"type": "text", "text": "Describe this photo in one or two concrete, visual sentences."},
-                    {"type": "image_url", "image_url": {
-                        "url": f"data:{body.image_mime or 'image/jpeg'};base64,{body.image_base64}"}},
-                ]}],
-            )
-            description = vresp.choices[0].message.content or ""
-        except Exception as e:
-            print(f"[edit_photo describe error] {e!r}")
-            return {"ok": False, "error": "Couldn't read the uploaded photo."}
-        import urllib.parse
-        prompt = f"{description}. {instruction}"
-        encoded = urllib.parse.quote(prompt)
-        url = f"https://image.pollinations.ai/prompt/{encoded}?width=1024&height=1024&nologo=true"
-        return {"ok": True, "images": [{"title": instruction, "image_url": url, "source": "AI-recreated"}]}
+    GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+DATABASE_URL = os.getenv("DATABASE_URL")
+
+MODEL = os.getenv("MODEL", "openai/gpt-oss-120b")
+MODEL_VISION = os.getenv(
+    "MODEL_VISION",
+    "meta-llama/llama-4-scout-17b-16e-instruct"
+)
+
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY")
+TELEGRAM_POLL_SECONDS = 30
+
+image_client = AsyncOpenAI(api_key=OPENAI_API_KEY)
+
+BASE = Path(__file__).parent
 
     try:
         for i in range(6):
