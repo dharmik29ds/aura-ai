@@ -231,7 +231,7 @@ async def config():
 @app.get("/me", dependencies=[])
 async def me(user_id: str = Depends(require_user)):
     prof = await pool.fetchrow("select display_name, telegram_chat_id from profiles where id = $1", user_id)
-    @app.post("/chat")
+  
     return {"display_name": prof["display_name"], "telegram_linked": bool(prof["telegram_chat_id"])}
 
 
