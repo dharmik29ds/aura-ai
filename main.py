@@ -103,7 +103,7 @@ async def require_user(authorization: str | None = Header(default=None)) -> str:
     token = authorization.removeprefix("Bearer ").strip()
     anon_key = (SUPABASE_ANON_KEY or "").strip()
     try:
-        async with httpx.AsyncClient(timeout=10) as http_client:
+        async with httpx.AsyncClient(timeout=15) as http_client:
             r = await http_client.get(
                 f"{SUPABASE_URL.strip()}/auth/v1/user",
                 headers={"Authorization": f"Bearer {token}", "apikey": anon_key},
@@ -111,7 +111,14 @@ async def require_user(authorization: str | None = Header(default=None)) -> str:
     except Exception as e:
         print(f"[auth] Supabase reach error: {e!r}")
         raise HTTPException(503, "Could not verify login right now. Try again.")
+    if r.status_code == 429:
+        print(f"[auth] Supabase rate-limited us: {r.status_code} {r.text[:200]}")
+        raise HTTPException(503, "Too many requests. Wait a moment and try again.")
+    if r.status_code >= 500:
+        print(f"[auth] Supabase server error: {r.status_code} {r.text[:200]}")
+        raise HTTPException(503, "Login service is temporarily unavailable. Try again.")
     if r.status_code != 200:
+        print(f"[auth] Supabase rejected token: {r.status_code} {r.text[:200]}")
         raise HTTPException(401, "Your session expired. Please log in again.")
     user = r.json()
     user_id = user["id"]
@@ -182,39 +189,42 @@ async def chat(body: ChatIn, user_id: str = Depends(require_user)):
     reply_text = ""
 
     has_image = bool(body.image_base64)
-    active_model = MODEL_VISION if has_image else MODEL
-    if has_image:
-        # Replace the plain-text last user message with a multimodal one
-        # carrying the photo, so the model can see it in the same
-        # tool-calling loop (it may just describe it, or call edit_photo).
-        messages[-1] = {"role": "user", "content": [
-            {"type": "text", "text": body.message or "What's in this photo?"},
-            {"type": "image_url", "image_url": {
-                "url": f"data:{body.image_mime or 'image/jpeg'};base64,{body.image_base64}"}},
-        ]}
+    image_description = None
 
-    async def do_edit_photo(instruction: str) -> dict:
-        """Describe the uploaded photo, then generate a new AI image that
-        applies the requested change. Not a pixel-level edit of the
-        original -- a fresh recreation, which the tool description makes
-        clear to the model so it can set the user's expectations."""
-        if not has_image:
-            return {"ok": False, "error": "No photo was uploaded this turn."}
+    if has_image:
+        # Step 1: describe the photo with a vision-only call (no tools --
+        # many vision models on Groq don't support tool-calling at the same
+        # time, which was silently breaking every photo turn before).
         try:
             vresp = await client.chat.completions.create(
-                model=MODEL_VISION, max_tokens=300,
+                model=MODEL_VISION, max_tokens=350,
                 messages=[{"role": "user", "content": [
-                    {"type": "text", "text": "Describe this photo in one or two concrete, visual sentences."},
+                    {"type": "text", "text": "Describe this photo in concrete, visual detail (2-4 sentences): "
+                                             "subjects, colors, setting, mood."},
                     {"type": "image_url", "image_url": {
                         "url": f"data:{body.image_mime or 'image/jpeg'};base64,{body.image_base64}"}},
                 ]}],
             )
-            description = vresp.choices[0].message.content or ""
+            image_description = vresp.choices[0].message.content or ""
         except Exception as e:
-            print(f"[edit_photo describe error] {e!r}")
-            return {"ok": False, "error": "Couldn't read the uploaded photo."}
+            print(f"[groq vision error] {e!r}")
+            return {"reply": "Sorry, I couldn't read that photo. The vision model may be "
+                             "unavailable right now -- try again in a moment.",
+                    "pending_actions": [], "images": []}
+        # Step 2: hand the description + the user's request to the normal,
+        # reliable tool-calling model so it can decide whether to just
+        # describe it back, or call edit_photo / generate_image.
+        messages[-1] = {"role": "user", "content":
+            f"[I uploaded a photo. Here's what it shows: {image_description}]\n\n{body.message}"}
+
+    async def do_edit_photo(instruction: str) -> dict:
+        """Generate a new AI image applying the requested change, based on
+        the already-computed description of the uploaded photo. Not a
+        pixel-level edit of the original -- a fresh recreation."""
+        if not image_description:
+            return {"ok": False, "error": "No photo was uploaded this turn."}
         import urllib.parse
-        prompt = f"{description}. {instruction}"
+        prompt = f"{image_description}. {instruction}"
         encoded = urllib.parse.quote(prompt)
         url = f"https://image.pollinations.ai/prompt/{encoded}?width=1024&height=1024&nologo=true"
         return {"ok": True, "images": [{"title": instruction, "image_url": url, "source": "AI-recreated"}]}
@@ -223,12 +233,12 @@ async def chat(body: ChatIn, user_id: str = Depends(require_user)):
         for i in range(6):
             try:
                 resp = await client.chat.completions.create(
-                    model=active_model, messages=messages, tools=tools, max_tokens=1024)
+                    model=MODEL, messages=messages, tools=tools, max_tokens=1024)
             except Exception as e:
                 if "tool call validation failed" in str(e).lower() and tools:
                     print(f"[groq tool-name error, retrying without tools] {e!r}")
                     resp = await client.chat.completions.create(
-                        model=active_model, messages=messages, tools=None, max_tokens=1024)
+                        model=MODEL, messages=messages, tools=None, max_tokens=1024)
                 else:
                     raise
             msg = resp.choices[0].message
