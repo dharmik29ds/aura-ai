@@ -60,21 +60,36 @@ async def reminder_loop():
                 "select id, user_id, title from reminders "
                 "where status = 'pending' and deleted_at is null and remind_at <= now()"
             )
+
             for r in due:
                 prof = await pool.fetchrow(
-                    "select telegram_chat_id from profiles where id = $1", r["user_id"])
+                    "select telegram_chat_id from profiles where id = $1",
+                    r["user_id"]
+                )
+
                 sent = False
+
                 if prof and prof["telegram_chat_id"]:
                     sent = await telegram.send_message(
-                        prof["telegram_chat_id"], f"\U0001F514 Reminder: {r['title']}")
+                        prof["telegram_chat_id"],
+                        f"\U0001F514 Reminder: {r['title']}"
+                    )
+
                 await pool.execute(
                     "update reminders set status = 'sent', updated_at = now() where id = $1",
-                    r["id"])
+                    r["id"]
+                )
+
                 if not sent:
-                    print(f"[reminder] {r['id']} due but not sent (no linked Telegram chat)")
-                    l
-          except Exception as e:
+                    print(
+                        f"[reminder] {r['id']} due but not sent "
+                        "(no linked Telegram chat)"
+                    )
+
+        except Exception as e:
             print(f"[reminder error] {e!r}")
+
+        await asyncio.sleep(TELEGRAM_POLL_SECONDS)
     
 
 
