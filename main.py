@@ -181,39 +181,54 @@ async def chat(body: ChatIn, user_id: str = Depends(require_user)):
     images = []
     reply_text = ""
 
-    # An uploaded photo is handled as its own single turn with a vision
-    # model: describe/analyze the image, no tool-calling loop needed.
-    if body.image_base64:
+    has_image = bool(body.image_base64)
+    active_model = MODEL_VISION if has_image else MODEL
+    if has_image:
+        # Replace the plain-text last user message with a multimodal one
+        # carrying the photo, so the model can see it in the same
+        # tool-calling loop (it may just describe it, or call edit_photo).
+        messages[-1] = {"role": "user", "content": [
+            {"type": "text", "text": body.message or "What's in this photo?"},
+            {"type": "image_url", "image_url": {
+                "url": f"data:{body.image_mime or 'image/jpeg'};base64,{body.image_base64}"}},
+        ]}
+
+    async def do_edit_photo(instruction: str) -> dict:
+        """Describe the uploaded photo, then generate a new AI image that
+        applies the requested change. Not a pixel-level edit of the
+        original -- a fresh recreation, which the tool description makes
+        clear to the model so it can set the user's expectations."""
+        if not has_image:
+            return {"ok": False, "error": "No photo was uploaded this turn."}
         try:
             vresp = await client.chat.completions.create(
-                model=MODEL_VISION,
-                max_tokens=1024,
-                messages=[
-                    {"role": "system", "content": system},
-                    {"role": "user", "content": [
-                        {"type": "text", "text": body.message or "What's in this photo?"},
-                        {"type": "image_url", "image_url": {
-                            "url": f"data:{body.image_mime or 'image/jpeg'};base64,{body.image_base64}"}},
-                    ]},
-                ],
+                model=MODEL_VISION, max_tokens=300,
+                messages=[{"role": "user", "content": [
+                    {"type": "text", "text": "Describe this photo in one or two concrete, visual sentences."},
+                    {"type": "image_url", "image_url": {
+                        "url": f"data:{body.image_mime or 'image/jpeg'};base64,{body.image_base64}"}},
+                ]}],
             )
-            reply_text = vresp.choices[0].message.content or ""
+            description = vresp.choices[0].message.content or ""
         except Exception as e:
-            print(f"[groq vision error] {e!r}")
-            reply_text = ("Sorry, I couldn't read that image. The vision model may be "
-                          "unavailable right now -- try again in a moment.")
-        return {"reply": reply_text or "Done.", "pending_actions": [], "images": []}
+            print(f"[edit_photo describe error] {e!r}")
+            return {"ok": False, "error": "Couldn't read the uploaded photo."}
+        import urllib.parse
+        prompt = f"{description}. {instruction}"
+        encoded = urllib.parse.quote(prompt)
+        url = f"https://image.pollinations.ai/prompt/{encoded}?width=1024&height=1024&nologo=true"
+        return {"ok": True, "images": [{"title": instruction, "image_url": url, "source": "AI-recreated"}]}
 
     try:
         for i in range(6):
             try:
                 resp = await client.chat.completions.create(
-                    model=MODEL, messages=messages, tools=tools, max_tokens=1024)
+                    model=active_model, messages=messages, tools=tools, max_tokens=1024)
             except Exception as e:
                 if "tool call validation failed" in str(e).lower() and tools:
                     print(f"[groq tool-name error, retrying without tools] {e!r}")
                     resp = await client.chat.completions.create(
-                        model=MODEL, messages=messages, tools=None, max_tokens=1024)
+                        model=active_model, messages=messages, tools=None, max_tokens=1024)
                 else:
                     raise
             msg = resp.choices[0].message
@@ -236,10 +251,13 @@ async def chat(body: ChatIn, user_id: str = Depends(require_user)):
                 except json.JSONDecodeError:
                     out = {"ok": False, "error": "Invalid tool arguments."}
                 else:
-                    out = await run_tool(pool, user_id, tc.function.name, args)
+                    if tc.function.name == "edit_photo":
+                        out = await do_edit_photo(args.get("instruction", ""))
+                    else:
+                        out = await run_tool(pool, user_id, tc.function.name, args)
                 if out.get("pending_action_id"):
                     pending.append({"id": out["pending_action_id"], "summary": out["summary"]})
-                if tc.function.name in ("image_search", "generate_image") and out.get("ok"):
+                if tc.function.name in ("image_search", "generate_image", "edit_photo") and out.get("ok"):
                     images.extend(out.get("images", []))
                 messages.append({"role": "tool", "tool_call_id": tc.id, "content": json.dumps(out)})
     except Exception as e:
