@@ -292,20 +292,27 @@ async def chat(body: ChatIn, user_id: str = Depends(require_user)):
                 else:
                     raise
             msg = resp.choices[0].message
+               tool_calls = msg.tool_calls or []
 
-            if not msg.tool_calls:
-                reply_text = msg.content or ""
+                       if not tool_calls:
+                      reply_text = msg.content or ""
                 break
 
             messages.append({
                 "role": "assistant",
                 "content": msg.content or "",
-                "tool_calls": [{"id": tc.id, "type": "function",
-                                "function": {"name": tc.function.name,
-                                             "arguments": tc.function.arguments}}
-                               for tc in msg.tool_calls],
+                "tool_calls": [{
+                    "id": tc.id,
+                    "type": "function",
+                                "function": {
+                                    "name": tc.function.name,
+                                    "arguments": tc.function.arguments
+                                }
+                }
+                               for tc in tool_calls:
+                              ]
             })
-        for tc in msg.tool_calls:
+        for tc in tool_calls:
             try:
                 args = json.loads(tc.function.arguments or "{}")
             except json.JSONDecodeError:
