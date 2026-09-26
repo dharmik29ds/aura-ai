@@ -238,7 +238,10 @@ async def me(user_id: str = Depends(require_user)):
 @app.post("/chat")
 async def chat(body: ChatIn, user_id: str = Depends(require_user)):
     system, memory_enabled = await build_system_prompt(user_id)
-    tools = [t for t in GROQ_TOOLS if memory_enabled or t["function"]["name"] != "save_memory"]
+    tools = [
+    t for t in (GROQ_TOOLS or [])
+    if memory_enabled or t["function"]["name"] != "save_memory"
+]
 
     messages = [{"role": "system", "content": system}]
     messages += [m for m in body.history if m.get("role") in ("user", "assistant")]
