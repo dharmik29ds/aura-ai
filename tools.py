@@ -19,7 +19,7 @@ import json
 from datetime import datetime
 from typing import Any
 
-# import search as search_module
+import search as search_module
 
 # ---------------------------------------------------------------
 # Tool definitions (Anthropic Messages API format)
@@ -151,6 +151,45 @@ TOOLS = [
                 "query": {"type": "string", "description": "What to search for, e.g. 'iPhone 15'"},
             },
             "required": ["query"],
+        },
+    },
+    {
+        "name": "generate_image",
+        "description": (
+            "Create a brand-new AI-generated picture from a text description -- for "
+            "art, illustrations, fictional scenes, or anything imaginative (e.g. 'a "
+            "dragon flying over mountains', 'cartoon of a cat astronaut'). Use this "
+            "when the user asks you to draw, create, make, or generate an image -- "
+            "as opposed to image_search, which finds REAL existing photos. "
+            "Do NOT use this to depict real, identifiable people or copyrighted "
+            "characters/brands. The image is shown to the user automatically below "
+            "your reply -- do not paste any URL in your text."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "prompt": {"type": "string", "description": "A clear visual description of the image to create."},
+            },
+            "required": ["prompt"],
+        },
+    },
+    {
+        "name": "edit_photo",
+        "description": (
+            "Use ONLY when the user has just uploaded/attached a photo AND asks for a "
+            "change to it (e.g. 'remove the background', 'make it black and white "
+            "art', 'turn this into a cartoon', 'add a hat'). This looks at the "
+            "uploaded photo and creates a NEW AI-generated image with the requested "
+            "change -- it is a fresh recreation, not a pixel-level edit of the "
+            "original file, so tell the user it's a recreated version, not the exact "
+            "original edited. Do not use this if no photo was uploaded this turn."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "instruction": {"type": "string", "description": "The requested change, e.g. 'remove the background'"},
+            },
+            "required": ["instruction"],
         },
     },
     {
@@ -287,12 +326,26 @@ async def image_search(db, user_id, query, **_):
     return await search_module.image_search(query)
 
 
+
+async def generate_image(db, user_id, prompt, **_):
+    import urllib.parse
+    encoded = urllib.parse.quote(prompt)
+    url = f"https://image.pollinations.ai/prompt/{encoded}?width=1024&height=1024&nologo=true"
+    return {"ok": True, "images": [{"title": prompt, "image_url": url, "source": "AI-generated"}]}
+
+
+
+async def edit_photo(db, user_id, instruction, **_):
+    return {"ok": False, "error": "No photo available to edit in this turn."}
+
+
 HANDLERS = {
     "save_memory": save_memory, "search_memory": search_memory,
     "create_note": create_note, "list_notes": list_notes,
     "create_reminder": create_reminder, "list_reminders": list_reminders,
     "update_reminder": update_reminder, "delete_record": delete_record,
-    "web_search": web_search, "image_search": image_search,
+    "web_search": web_search, "image_search": image_search, "generate_image": generate_image,
+    "edit_photo": edit_photo,
 }
 
 
