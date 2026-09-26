@@ -1,54 +1,54 @@
-"""Search helpers for Aura AI."""
-import html
-import re
-import urllib.parse
-from typing import Any
+import os
 import httpx
 
-async def web_search(query: str, max_results: int = 5) -> list[dict[str, Any]]:
-    query = (query or "").strip()
-    if not query:
-        return []
+SERPER_API_KEY = os.getenv("SERPER_API_KEY")
+BASE = "https://google.serper.dev"
 
-    max_results = max(1, min(int(max_results or 5), 10))
-    headers = {"User-Agent": "Mozilla/5.0 (compatible; AuraAI/1.0)"}
 
-    async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
-        response = await client.get(
-            "https://html.duckduckgo.com/html/",
-            params={"q": query},
-            headers=headers,
-        )
-        response.raise_for_status()
+async def web_search(query: str, num: int = 5) -> dict:
+    """Text search: returns titles, links, and snippets."""
+    if not SERPER_API_KEY:
+        return {"ok": False, "error": "Search is not configured (missing SERPER_API_KEY)."}
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            r = await client.post(
+                f"{BASE}/search",
+                headers={"X-API-KEY": SERPER_API_KEY, "Content-Type": "application/json"},
+                json={"q": query, "num": num},
+            )
+        data = r.json()
+        results = [
+            {"title": item.get("title"), "link": item.get("link"), "snippet": item.get("snippet")}
+            for item in data.get("organic", [])[:num]
+        ]
+        return {"ok": True, "results": results}
+    except Exception as e:
+        print(f"[search] web_search error: {e!r}")
+        return {"ok": False, "error": "Search failed. Try again in a moment."}
 
-    pattern = re.compile(
-        r'<a[^>]+class="result__a"[^>]+href="([^"]+)"[^>]*>(.*?)</a>',
-        re.I | re.S,
-    )
 
-    results = []
-    for href, title_html in pattern.findall(response.text):
-        title = html.unescape(re.sub(r"<[^>]+>", "", title_html)).strip()
-        href = html.unescape(href)
-
-        parsed = urllib.parse.urlparse(href)
-        params = urllib.parse.parse_qs(parsed.query)
-        if params.get("uddg"):
-            href = params["uddg"][0]
-
-        if title and href:
-            results.append({"title": title, "url": href, "snippet": ""})
-
-        if len(results) >= max_results:
-            break
-
-    return results
-
-async def search(query: str, max_results: int = 5):
-    return await web_search(query, max_results)
-
-async def search_web(query: str, max_results: int = 5):
-    return await web_search(query, max_results)
-
-async def run(query: str, max_results: int = 5):
-    return await web_search(query, max_results)
+async def image_search(query: str, num: int = 4) -> dict:
+    """Image search: returns real image URLs (not AI-generated) for a query,
+    e.g. a product name. The backend attaches these to the chat response so
+    the frontend can render them -- the model never has to paste raw URLs."""
+    if not SERPER_API_KEY:
+        return {"ok": False, "error": "Image search is not configured (missing SERPER_API_KEY)."}
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            r = await client.post(
+                f"{BASE}/images",
+                headers={"X-API-KEY": SERPER_API_KEY, "Content-Type": "application/json"},
+                json={"q": query, "num": num},
+            )
+        data = r.json()
+        images = [
+            {"title": item.get("title"), "image_url": item.get("imageUrl"), "source": item.get("source")}
+            for item in data.get("images", [])[:num]
+            if item.get("imageUrl")
+        ]
+        if not images:
+            return {"ok": False, "error": "No images found for that query."}
+        return {"ok": True, "images": images}
+    except Exception as e:
+        print(f"[search] image_search error: {e!r}")
+        return {"ok": False, "error": "Image search failed. Try again in a moment."}
