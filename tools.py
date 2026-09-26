@@ -156,14 +156,15 @@ TOOLS = [
     {
         "name": "generate_image",
         "description": (
-            "Create a brand-new AI-generated picture from a text description -- for "
-            "art, illustrations, fictional scenes, or anything imaginative (e.g. 'a "
-            "dragon flying over mountains', 'cartoon of a cat astronaut'). Use this "
-            "when the user asks you to draw, create, make, or generate an image -- "
-            "as opposed to image_search, which finds REAL existing photos. "
-            "Do NOT use this to depict real, identifiable people or copyrighted "
-            "characters/brands. The image is shown to the user automatically below "
-            "your reply -- do not paste any URL in your text."
+            "MANDATORY whenever the user asks you to draw, create, make, paint, or "
+            "generate a picture/image/art from a description (not from an uploaded "
+            "photo -- see edit_photo for that). You have NO other way to produce an "
+            "image -- you must call this tool, never invent or type out an image URL "
+            "yourself. Use for fictional/imaginative scenes (e.g. 'a dragon flying "
+            "over mountains', 'cartoon of a cat astronaut'). Do NOT depict real, "
+            "identifiable people or copyrighted characters/brands. The image is "
+            "shown to the user automatically below your reply -- your text reply "
+            "should just be a short acknowledgement, no URL or markdown image syntax."
         ),
         "input_schema": {
             "type": "object",
