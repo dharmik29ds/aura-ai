@@ -286,32 +286,40 @@ async def chat(body: ChatIn, user_id: str = Depends(require_user)):
                                              "arguments": tc.function.arguments}}
                                for tc in msg.tool_calls],
             })
-            for tc in msg.tool_calls:
-                try:
-                    args = json.loads(tc.function.arguments or "{}")
-                except json.JSONDecodeError:
-                    out = {"ok": False, "error": "Invalid tool arguments."}
+        for tc in msg.tool_calls:
+            try:
+                args = json.loads(tc.function.arguments or "{}")
+            except json.JSONDecodeError:
+                out = {"ok": False, "error": "Invalid tool arguments."}
+            else:
+                if tc.function.name == "edit_photo":
+                    out = await do_edit_photo(
+                        args.get("instruction", ""),
+                        body.image_base64,
+                        body.image_mime or "image/jpeg"
+                    )
                 else:
-                    
-   if tc.function.name == "edit_photo":
-    out = await do_edit_photo(
-        args.get("instruction", ""),
-        body.image_base64,
-        body.image_mime or "image/jpeg"
-    )
-else:
-    out = await run_tool(
-        pool,
-        user_id,
-        tc.function.name,
-        args
-    )
-              
-                if out.get("pending_action_id"):
-                    pending.append({"id": out["pending_action_id"], "summary": out["summary"]})
-                if tc.function.name in ("image_search", "generate_image", "edit_photo") and out.get("ok"):
-                    images.extend(out.get("images", []))
-                messages.append({"role": "tool", "tool_call_id": tc.id, "content": json.dumps(out)})
+                    out = await run_tool(
+                        pool,
+                        user_id,
+                        tc.function.name,
+                        args
+                    )
+
+            if out.get("pending_action_id"):
+                pending.append({
+                    "id": out["pending_action_id"],
+                    "summary": out["summary"]
+                })
+
+            if tc.function.name in ("image_search", "generate_image", "edit_photo") and out.get("ok"):
+                images.extend(out.get("images", []))
+
+            messages.append({
+                "role": "tool",
+                "tool_call_id": tc.id,
+                "content": json.dumps(out)
+            })
     except Exception as e:
         print(f"[groq error] {e!r}")
         return {"reply": "Sorry, I couldn't reach the AI service. Check your GROQ_API_KEY and "
