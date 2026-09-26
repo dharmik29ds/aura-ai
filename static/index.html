@@ -241,6 +241,7 @@
         </select>
       </div>
       <div class="editFooter">
+        <button type="button" id="editDownload">⬇ Download</button>
         <button type="button" id="editCancel">Cancel</button>
         <button type="button" id="editSave" class="primary">Save</button>
       </div>
@@ -526,6 +527,15 @@
       renderCanvas();
     };
     newImg.src = cropped.toDataURL('image/png');
+  });
+
+  document.getElementById('editDownload').addEventListener('click', () => {
+    renderCanvas();
+    const dataUrl = editCanvas.toDataURL('image/jpeg', 0.92);
+    const a = document.createElement('a');
+    a.href = dataUrl;
+    a.download = ((pendingFile && pendingFile.name) || 'aura-edit').replace(/\.[^.]+$/, '') + '-edited.jpg';
+    document.body.appendChild(a); a.click(); a.remove();
   });
 
   document.getElementById('editSave').addEventListener('click', () => {
