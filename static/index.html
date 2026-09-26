@@ -120,6 +120,11 @@
   .editFooter { display: flex; gap: 10px; justify-content: flex-end; }
   .editFooter button.primary { background: var(--teal); border-color: var(--teal); color: #fff; }
 
+
+  #micBtn { width: 44px; height: 44px; flex: 0 0 auto; display: flex; align-items: center; justify-content: center; font-size: 18px; padding: 0; }
+  #micBtn.listening { background: var(--danger); border-color: var(--danger); color: #fff; animation: pulse 1.2s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(179,38,30,0.4); } 50% { box-shadow: 0 0 0 8px rgba(179,38,30,0); } }
+
   @media (prefers-reduced-motion: no-preference) { .msg { animation: in .18s ease-out; } @keyframes in { from { opacity: 0; transform: translateY(4px); } } }
 </style>
 </head>
@@ -250,6 +255,7 @@
   <form id="form">
     <input type="file" id="fileInput" accept="image/*" hidden>
     <button type="button" id="attachBtn" title="Attach a photo" aria-label="Attach a photo">📎</button>
+    <button type="button" id="micBtn" title="Speak your message" aria-label="Speak your message" hidden>🎤</button>
     <textarea id="input" rows="1" placeholder="Message Aura" aria-label="Message Aura"></textarea>
     <button id="send" type="submit">Send</button>
   </form>
@@ -546,6 +552,32 @@
     filePreviewImg.src = dataUrl;
     editModal.classList.remove('show');
   });
+
+
+  // ---------------- Voice input (browser speech recognition, free, no backend) ----------------
+  const micBtn = document.getElementById('micBtn');
+  const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+  let recognizer = null, listening = false;
+  if (SpeechRec) {
+    micBtn.hidden = false;
+    recognizer = new SpeechRec();
+    recognizer.continuous = false;
+    recognizer.interimResults = false;
+    recognizer.lang = 'en-IN'; // works well for English/Hinglish speech; change to 'hi-IN' for Hindi
+    recognizer.onresult = (e) => {
+      const text = e.results[0][0].transcript;
+      input.value = (input.value ? input.value + ' ' : '') + text;
+      input.dispatchEvent(new Event('input'));
+      input.focus();
+    };
+    recognizer.onerror = () => { listening = false; micBtn.classList.remove('listening'); };
+    recognizer.onend = () => { listening = false; micBtn.classList.remove('listening'); };
+    micBtn.addEventListener('click', () => {
+      if (listening) { recognizer.stop(); return; }
+      try { recognizer.start(); listening = true; micBtn.classList.add('listening'); }
+      catch (e) {}
+    });
+  }
 
   function add(text, cls) {
     const el = document.createElement('div');
