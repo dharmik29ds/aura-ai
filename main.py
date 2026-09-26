@@ -72,9 +72,16 @@ async def reminder_loop():
                     r["id"])
                 if not sent:
                     print(f"[reminder] {r['id']} due but not sent (no linked Telegram chat)")
-        except Exception as e:
-            print(f"[reminder_loop error] {e!r}")
-        await asyncio.sleep(TELEGRAM_POLL_SECONDS)
+       except Exception as e:
+    import traceback
+    print("[groq error]")
+    traceback.print_exc()
+
+    return {
+        "reply": "AI service error. Please check Render logs.",
+        "pending_actions": [],
+        "images": []
+    }
 
 
 @asynccontextmanager
