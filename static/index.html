@@ -101,6 +101,25 @@
   #filePreview span { flex: 1; font-size: 14px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   #filePreview button { padding: 4px 10px; font-size: 13px; }
 
+
+  #filePreview button#fileEdit { background: var(--teal); border-color: var(--teal); color: #fff; }
+
+  #editModal { position: fixed; inset: 0; background: rgba(42,26,61,0.55); display: none; align-items: center; justify-content: center; z-index: 20; padding: 16px; }
+  #editModal.show { display: flex; }
+  .editbox { background: var(--card); border-radius: 16px; padding: 18px; max-width: 480px; width: 100%; max-height: 92vh; overflow-y: auto; }
+  .editbox h3 { margin: 0 0 12px; font-family: var(--font-display); font-size: 20px; }
+  #editCanvasWrap { position: relative; width: 100%; background: #00000010; border-radius: 10px; overflow: hidden; margin-bottom: 14px; touch-action: none; }
+  #editCanvas { width: 100%; display: block; }
+  #cropOverlay { position: absolute; border: 2px dashed var(--teal); background: rgba(221,138,46,0.12); display: none; }
+  .editRow { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+  .editRow label { width: 84px; font-size: 13px; color: var(--muted); flex: 0 0 auto; }
+  .editRow input[type="range"] { flex: 1; }
+  .editRow select { flex: 1; font-family: inherit; font-size: 14px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); }
+  .editActions { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+  .editActions button { font-size: 13px; padding: 7px 12px; }
+  .editFooter { display: flex; gap: 10px; justify-content: flex-end; }
+  .editFooter button.primary { background: var(--teal); border-color: var(--teal); color: #fff; }
+
   @media (prefers-reduced-motion: no-preference) { .msg { animation: in .18s ease-out; } @keyframes in { from { opacity: 0; transform: translateY(4px); } } }
 </style>
 </head>
@@ -186,7 +205,46 @@
   <div id="filePreview">
     <img id="filePreviewImg" alt="">
     <span id="filePreviewName"></span>
+    <button type="button" id="fileEdit">✏️ Edit</button>
     <button type="button" id="fileRemove">Remove</button>
+  </div>
+
+  <div id="editModal">
+    <div class="editbox">
+      <h3>Edit photo</h3>
+      <div id="editCanvasWrap">
+        <canvas id="editCanvas"></canvas>
+        <div id="cropOverlay"></div>
+      </div>
+      <div class="editActions">
+        <button type="button" id="rotateLeft">⟲ Rotate</button>
+        <button type="button" id="rotateRight">⟳ Rotate</button>
+        <button type="button" id="cropToggle">▭ Crop</button>
+        <button type="button" id="cropApply" hidden>Apply crop</button>
+        <button type="button" id="resetEdits">Reset</button>
+      </div>
+      <div class="editRow">
+        <label for="brightness">Brightness</label>
+        <input type="range" id="brightness" min="-100" max="100" value="0">
+      </div>
+      <div class="editRow">
+        <label for="contrast">Contrast</label>
+        <input type="range" id="contrast" min="-100" max="100" value="0">
+      </div>
+      <div class="editRow">
+        <label for="filterSelect">Filter</label>
+        <select id="filterSelect">
+          <option value="none">None</option>
+          <option value="bw">Black &amp; white</option>
+          <option value="sepia">Sepia</option>
+          <option value="vintage">Vintage</option>
+        </select>
+      </div>
+      <div class="editFooter">
+        <button type="button" id="editCancel">Cancel</button>
+        <button type="button" id="editSave" class="primary">Save</button>
+      </div>
+    </div>
   </div>
   <form id="form">
     <input type="file" id="fileInput" accept="image/*" hidden>
@@ -344,6 +402,140 @@
       showAuth();
     }
   })();
+
+
+  // ---------------- Photo editor (crop, rotate, brightness/contrast, filters) ----------------
+  const editModal = document.getElementById('editModal');
+  const editCanvas = document.getElementById('editCanvas');
+  const editCtx = editCanvas.getContext('2d');
+  const cropOverlay = document.getElementById('cropOverlay');
+  const canvasWrap = document.getElementById('editCanvasWrap');
+  const brightnessInput = document.getElementById('brightness');
+  const contrastInput = document.getElementById('contrast');
+  const filterSelect = document.getElementById('filterSelect');
+  let baseImg = null;       // the ORIGINAL image (for reset)
+  let workingImg = null;    // current image after crop/rotate (adjustments applied on top, non-destructively)
+  let rotationDeg = 0;
+  let cropping = false;
+  let cropStart = null;
+
+  function loadImageEl(dataUrl) {
+    return new Promise(resolve => { const im = new Image(); im.onload = () => resolve(im); im.src = dataUrl; });
+  }
+
+  function filterCss() {
+    const b = 1 + (parseInt(brightnessInput.value, 10) / 100);
+    const c = 1 + (parseInt(contrastInput.value, 10) / 100);
+    let f = `brightness(${b}) contrast(${c})`;
+    if (filterSelect.value === 'bw') f += ' grayscale(1)';
+    if (filterSelect.value === 'sepia') f += ' sepia(0.85)';
+    if (filterSelect.value === 'vintage') f += ' sepia(0.35) saturate(1.3) contrast(1.05)';
+    return f;
+  }
+
+  function renderCanvas() {
+    if (!workingImg) return;
+    const rot = ((rotationDeg % 360) + 360) % 360;
+    const swap = rot === 90 || rot === 270;
+    const w = swap ? workingImg.height : workingImg.width;
+    const h = swap ? workingImg.width : workingImg.height;
+    editCanvas.width = w; editCanvas.height = h;
+    editCtx.save();
+    editCtx.filter = filterCss();
+    editCtx.translate(w / 2, h / 2);
+    editCtx.rotate(rot * Math.PI / 180);
+    editCtx.drawImage(workingImg, -workingImg.width / 2, -workingImg.height / 2);
+    editCtx.restore();
+  }
+
+  async function openEditor() {
+    if (!pendingFile) return;
+    const dataUrl = `data:${pendingFile.mime};base64,${pendingFile.base64}`;
+    baseImg = await loadImageEl(dataUrl);
+    workingImg = baseImg;
+    rotationDeg = 0;
+    brightnessInput.value = 0; contrastInput.value = 0; filterSelect.value = 'none';
+    cropping = false; cropOverlay.style.display = 'none';
+    document.getElementById('cropApply').hidden = true;
+    renderCanvas();
+    editModal.classList.add('show');
+  }
+
+  document.getElementById('fileEdit').addEventListener('click', openEditor);
+  document.getElementById('editCancel').addEventListener('click', () => editModal.classList.remove('show'));
+
+  document.getElementById('rotateLeft').addEventListener('click', () => { rotationDeg -= 90; renderCanvas(); });
+  document.getElementById('rotateRight').addEventListener('click', () => { rotationDeg += 90; renderCanvas(); });
+  document.getElementById('resetEdits').addEventListener('click', () => {
+    workingImg = baseImg; rotationDeg = 0;
+    brightnessInput.value = 0; contrastInput.value = 0; filterSelect.value = 'none';
+    cropping = false; cropOverlay.style.display = 'none';
+    document.getElementById('cropApply').hidden = true;
+    renderCanvas();
+  });
+  [brightnessInput, contrastInput, filterSelect].forEach(el => el.addEventListener('input', renderCanvas));
+
+  const cropToggle = document.getElementById('cropToggle');
+  const cropApplyBtn = document.getElementById('cropApply');
+  cropToggle.addEventListener('click', () => {
+    cropping = !cropping;
+    cropOverlay.style.display = 'none';
+    cropApplyBtn.hidden = !cropping;
+  });
+
+  function pointerPos(e) {
+    const r = editCanvas.getBoundingClientRect();
+    const cx = (e.touches ? e.touches[0].clientX : e.clientX) - r.left;
+    const cy = (e.touches ? e.touches[0].clientY : e.clientY) - r.top;
+    return { x: Math.max(0, Math.min(r.width, cx)), y: Math.max(0, Math.min(r.height, cy)) };
+  }
+  canvasWrap.addEventListener('pointerdown', e => {
+    if (!cropping) return;
+    cropStart = pointerPos(e);
+    cropOverlay.style.left = cropStart.x + 'px'; cropOverlay.style.top = cropStart.y + 'px';
+    cropOverlay.style.width = '0px'; cropOverlay.style.height = '0px';
+    cropOverlay.style.display = 'block';
+  });
+  canvasWrap.addEventListener('pointermove', e => {
+    if (!cropping || !cropStart) return;
+    const p = pointerPos(e);
+    const x = Math.min(cropStart.x, p.x), y = Math.min(cropStart.y, p.y);
+    const w = Math.abs(p.x - cropStart.x), h = Math.abs(p.y - cropStart.y);
+    cropOverlay.style.left = x + 'px'; cropOverlay.style.top = y + 'px';
+    cropOverlay.style.width = w + 'px'; cropOverlay.style.height = h + 'px';
+  });
+  canvasWrap.addEventListener('pointerup', () => { cropStart = null; });
+
+  cropApplyBtn.addEventListener('click', () => {
+    const wrapRect = editCanvas.getBoundingClientRect();
+    const scaleX = editCanvas.width / wrapRect.width;
+    const scaleY = editCanvas.height / wrapRect.height;
+    const ox = parseFloat(cropOverlay.style.left) || 0;
+    const oy = parseFloat(cropOverlay.style.top) || 0;
+    const ow = parseFloat(cropOverlay.style.width) || 0;
+    const oh = parseFloat(cropOverlay.style.height) || 0;
+    if (ow < 4 || oh < 4) return;
+    const sx = ox * scaleX, sy = oy * scaleY, sw = ow * scaleX, sh = oh * scaleY;
+    const cropped = document.createElement('canvas');
+    cropped.width = sw; cropped.height = sh;
+    cropped.getContext('2d').drawImage(editCanvas, sx, sy, sw, sh, 0, 0, sw, sh);
+    const newImg = new Image();
+    newImg.onload = () => {
+      workingImg = newImg; rotationDeg = 0;
+      cropping = false; cropOverlay.style.display = 'none'; cropApplyBtn.hidden = true;
+      renderCanvas();
+    };
+    newImg.src = cropped.toDataURL('image/png');
+  });
+
+  document.getElementById('editSave').addEventListener('click', () => {
+    renderCanvas();
+    const dataUrl = editCanvas.toDataURL('image/jpeg', 0.9);
+    const base64 = dataUrl.split(',')[1];
+    pendingFile = { base64, mime: 'image/jpeg', name: (pendingFile && pendingFile.name) || 'edited.jpg' };
+    filePreviewImg.src = dataUrl;
+    editModal.classList.remove('show');
+  });
 
   function add(text, cls) {
     const el = document.createElement('div');
