@@ -161,10 +161,13 @@ TOOLS = [
             "photo -- see edit_photo for that). You have NO other way to produce an "
             "image -- you must call this tool, never invent or type out an image URL "
             "yourself. Use for fictional/imaginative scenes (e.g. 'a dragon flying "
-            "over mountains', 'cartoon of a cat astronaut'). Do NOT depict real, "
-            "identifiable people or copyrighted characters/brands. The image is "
-            "shown to the user automatically below your reply -- your text reply "
-            "should just be a short acknowledgement, no URL or markdown image syntax."
+            "over mountains', 'cartoon of a cat astronaut'). For a REAL branded "
+            "product (a specific phone model, car, etc.) use image_search instead, "
+            "since the user wants to see the actual real thing, not an AI drawing of "
+            "it. Do NOT depict real, identifiable people or copyrighted characters/"
+            "brands. The image is shown to the user automatically below your reply "
+            "-- your text reply should just be a short acknowledgement, no URL or "
+            "markdown image syntax."
         ),
         "input_schema": {
             "type": "object",
