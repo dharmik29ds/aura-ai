@@ -570,13 +570,31 @@
       input.dispatchEvent(new Event('input'));
       input.focus();
     };
-    recognizer.onerror = () => { listening = false; micBtn.classList.remove('listening'); };
+    recognizer.onerror = (e) => {
+      listening = false; micBtn.classList.remove('listening');
+      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+        alert('Microphone access is blocked. Click the 🔒 or ⓘ icon next to the address bar, allow Microphone, then try again.');
+      } else if (e.error === 'no-speech') {
+        // silent -- just means nothing was heard, no need to alarm the user
+      } else {
+        alert('Voice input error: ' + e.error);
+      }
+    };
     recognizer.onend = () => { listening = false; micBtn.classList.remove('listening'); };
-    micBtn.addEventListener('click', () => {
+    micBtn.addEventListener('click', async () => {
       if (listening) { recognizer.stop(); return; }
-      try { recognizer.start(); listening = true; micBtn.classList.add('listening'); }
-      catch (e) {}
+      try {
+        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          stream.getTracks().forEach(t => t.stop());
+        }
+        recognizer.start(); listening = true; micBtn.classList.add('listening');
+      } catch (e) {
+        alert('Could not access the microphone. Check your browser\'s site permissions for this page.');
+      }
     });
+  } else {
+    micBtn.hidden = true;
   }
 
   function add(text, cls) {
