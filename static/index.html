@@ -384,17 +384,36 @@
   const filePreviewName = document.getElementById('filePreviewName');
   const fileRemove = document.getElementById('fileRemove');
 
+  function downscaleDataUrl(dataUrl, maxSide) {
+    return new Promise((resolve) => {
+      const im = new Image();
+      im.onload = () => {
+        const longSide = Math.max(im.width, im.height);
+        if (longSide <= maxSide) { resolve(dataUrl); return; }
+        const s = maxSide / longSide;
+        const c = document.createElement('canvas');
+        c.width = Math.round(im.width * s); c.height = Math.round(im.height * s);
+        c.getContext('2d').drawImage(im, 0, 0, c.width, c.height);
+        resolve(c.toDataURL('image/jpeg', 0.88));
+      };
+      im.onerror = () => resolve(dataUrl);
+      im.src = dataUrl;
+    });
+  }
+
   attachBtn.addEventListener('click', () => fileInput.click());
   fileInput.addEventListener('change', () => {
     const f = fileInput.files[0];
     if (!f) return;
     if (!f.type.startsWith('image/')) { alert('Please choose an image file.'); return; }
-    if (f.size > 8 * 1024 * 1024) { alert('That image is too large (max 8MB).'); return; }
+    if (f.size > 15 * 1024 * 1024) { alert('That image is too large (max 15MB).'); return; }
     const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = reader.result; // "data:image/jpeg;base64,...."
+    reader.onload = async () => {
+      // Phone photos (esp. from WhatsApp) can be huge -- shrink before
+      // sending, or the AI service rejects/times out on the request.
+      const dataUrl = await downscaleDataUrl(reader.result, 1600);
       const base64 = dataUrl.split(',')[1];
-      pendingFile = { base64, mime: f.type, name: f.name };
+      pendingFile = { base64, mime: 'image/jpeg', name: f.name };
       filePreviewImg.src = dataUrl;
       filePreviewName.textContent = f.name;
       filePreview.classList.add('show');
